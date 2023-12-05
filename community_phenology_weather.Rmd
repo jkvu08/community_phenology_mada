@@ -1,0 +1,2008 @@
+---
+title: "community_phenology"
+author: "Jannet Vu"
+date: "10/26/2022"
+output: html_document
+---
+Manuscript title: Temperature and rainfall seasonality drives tropical community phenology in southeastern Madagascar
+
+**Goal is identify the association between regional weather patterns and community phenology (flowering & fruiting) Kianjavato at the monthly scale**\
+
+#### Set up working environment
+First set up working environment and load in relevant files
+```{r, setup, echo=T, message=FALSE, warning=FALSE}
+# load in packages
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(reshape)
+library(corrgram)
+library(DescTools)
+library(doParallel)
+library(gridExtra)
+library(caret)
+library(cowplot)
+library(AICcmodavg)
+library(betareg)
+library(ggeffects)
+
+# set up working directory 
+setwd("C:/data")
+
+# set up directory to save figures
+figpath <- "C:/figures"
+
+# detect cores for parallel computing
+numcores <- detectCores() -1
+registerDoParallel(numcores) # register cores
+
+# list of month labels 
+mthname <- c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
+# load appropriate files
+# data for plant vernacular and Latin names
+plant_names <- read.csv('phen_plantnames.csv', header= T, stringsAsFactors = F) # local plant and Latin names
+
+# dataset for climatic association analysis
+kphen_pop_fr <- read.csv('kian_phen_pop_fruit_clim.csv', header= T, stringsAsFactors = F)[,-1] 
+kphen_pop_fr$Date <- as.Date(kphen_pop_fr$Date, tz = 'Africa/Nairobi')
+
+kphen_pop_fl <- read.csv('kian_phen_pop_flower_clim.csv', header= T, stringsAsFactors = F)[,-1]
+kphen_pop_fl$Date <- as.Date(kphen_pop_fl$Date, tz = 'Africa/Nairobi')
+
+kphen_pop_fl$productivity_mean <- kphen_pop_fl$productivity_sum/kphen_pop_fl$n
+kphen_pop_fr$productivity_mean <- kphen_pop_fr$productivity_sum/kphen_pop_fr$n
+```
+columns:\
+year - year\
+month - month\
+monthname - categorical month name\
+Date - date \
+dataset - indicate forest, sssw = Sangasanga and vvsw = Vatovavy \  
+individual_count - number of individuals flowering or fruiting \
+sprich_count - species richness of flowering or fruiting \
+productivity_sum - fruiting or flowering productivity (sum of phenology across individuals) \
+individuals - proportion of individuals flowering or fruiting \
+sprich - proportion of taxa flowering or fruiting \
+productivity - relative fruiting or flowering productivity (sum of phenology across individuals/maximal potential phenology across all individuals) \
+rain - cumulative monthly rain (mm)\
+temp - average monthly temp (C)\
+rad - cumulative monthly solar radiation $(Wm^-2)$\
+onset - 0/1 indicates if the record occurs at the onset of the wet season (November -January)
+transition - 0/1 indicates if the record occurs at the transition between the dry and wet season (October-December)
+productivity_mean - mean flower or fruit productivity across individuals
+
+````{r, echo = T, warning = F, message = F}
+# visualize to get sense of data
+head(kphen_pop_fr) 
+```
+
+Get distribution of the responses
+```{r, echo = T, warning = F, message = T}
+par(mfrow = c(4,2))
+hist(kphen_pop_fl$individuals, xlab ='prop. of individuals', main = 'flower')
+hist(kphen_pop_fl$sprich, xlab = 'prop. of taxa', main = '')
+hist(kphen_pop_fl$productivity, xlab ='productivity', main = '')
+hist(kphen_pop_fl$productivity_mean, xlab ='mean productivity', main = '')
+hist(kphen_pop_fr$individuals, xlab ='prop. of individuals', main = 'fruit')
+hist(kphen_pop_fr$sprich, xlab = 'prop. of taxa', main = '')
+hist(kphen_pop_fr$productivity, xlab ='productivity', main = '')
+hist(kphen_pop_fr$productivity_mean, xlab ='mean productivity', main = '')
+```
+
+Evaluate the relationship between community phenology and weather 
+```{r, echo = T, warning = F, message = T}
+# examine the correlation plots between the independent variables 
+corrgram(kphen_pop_fl[,c('rain','temp','rad')], lower.panel =panel.pts, upper.panel= panel.conf,diag.panel = panel.density)
+```
+Temperature and solar radiation are highly correlation, so should not be put into the same model. 
+
+Visualize community phenology across months 
+```{r, echo = T, message = T, warning = F}
+# generate boxplot of prop of individuals flowering across months
+fli_box <- ggplot(kphen_pop_fl %>% filter(year != 2010), 
+                  aes(x=as.factor(month),y=individuals)) +
+                geom_boxplot(outlier.colour="lightgrey") +
+                theme_minimal(base_size=10) +
+                theme(legend.position = 'none') +
+                labs(x = 'month',
+                     y ='proportion of individual', 
+                     title = 'flowering') +
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+# generate boxplot of prop of taxa flowering across months
+flsp_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
+                   aes(x=as.factor(month),y=sprich))+
+                geom_boxplot(outlier.colour="lightgrey")+
+                theme_minimal(base_size=10) +
+                theme(legend.position = 'none') +
+                labs(x = 'month',y ='species richness') +
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+# generate boxplot of flowering productivity across months
+flprod_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
+                     aes(x=as.factor(month),y=productivity))+
+                  geom_boxplot(outlier.colour="lightgrey")+
+                  theme_minimal(base_size=10) +
+                  theme(legend.position = 'none') +
+                  labs(x = 'month',y ='productivity') +
+                  facet_wrap(~dataset, 
+                             nrow = 1, 
+                             ncol = 2, 
+                             strip.position = 'right')
+
+# generate boxplot of prop of individuals fruiting across months
+fri_box  <- ggplot(kphen_pop_fr,
+                   aes(x=as.factor(month),y=individuals)) +
+                geom_boxplot(outlier.colour="lightgrey") +
+                theme_minimal(base_size=10) +
+                theme(legend.position = 'none') +
+                labs(x = 'month',y ='individual frequency', title = 'fruiting') +
+                scale_fill_manual(values = c('grey80','grey40')) + 
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+# generate boxplot of prop of taxa fruiting across months
+frsp_box <- ggplot(kphen_pop_fr,
+                   aes(x=as.factor(month),y=sprich))+
+                geom_boxplot(outlier.colour="lightgrey")+
+                theme_minimal(base_size=10) +
+                theme(legend.position = 'none') +
+                labs(x = 'month',y ='species richness') +
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+frprod_box  <- ggplot(kphen_pop_fr,
+                      aes(x=as.factor(month),y=productivity)) +
+                  geom_boxplot(outlier.colour="lightgrey")+
+                  theme_minimal(base_size=10) +
+                  theme(legend.position = 'none') +
+                  labs(x = 'month',y ='productivity') +
+                  facet_wrap(~dataset, 
+                             nrow = 1, 
+                             ncol = 2, 
+                             strip.position = 'right')
+
+plot_grid(fli_box, fri_box, flsp_box, frsp_box, flprod_box, frprod_box, nrow = 4, ncol=2)
+
+plot_grid(fri_box, frsp_box, frprod_box, nrow = 3, ncol=1)
+
+```
+
+```{r}
+# generate boxplot of prop of individuals fruiting across months
+fri_box2  <- ggplot(subfruit,
+                   aes(x=as.factor(month),y=fruited)) +
+                geom_boxplot(outlier.colour="lightgrey") +
+                theme_minimal(base_size=10) +
+                theme(legend.position = 'none') +
+                labs(x = 'month',y ='proportion of individuals', title = 'fruiting') +
+                scale_fill_manual(values = c('grey80','grey40')) + 
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+# generate boxplot of prop of taxa fruiting across months
+frsp_box2 <- ggplot(subfruit,
+                   aes(x=as.factor(month),y=sprich))+
+                geom_boxplot(outlier.colour="lightgrey")+
+                theme_minimal(base_size=10) +
+                theme(legend.position = 'none') +
+                labs(x = 'month',y ='proportion of taxa') +
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+frprod_box2  <- ggplot(subfruit,
+                      aes(x=as.factor(month),y=fruit.productivity)) +
+                  geom_boxplot(outlier.colour="lightgrey")+
+                  theme_minimal(base_size=10) +
+                  theme(legend.position = 'none') +
+                  labs(x = 'month',y ='fruit productivity') +
+                  facet_wrap(~dataset, 
+                             nrow = 1, 
+                             ncol = 2, 
+                             strip.position = 'right')
+
+                  
+
+plot_grid(fli_box, fri_box, flsp_box, frsp_box, flprod_box, frprod_box, nrow = 4, ncol=2)
+
+plot_grid(fri_box, frsp_box, frprod_box, nrow = 3, ncol=1)
+plot_grid(frsp_box2, frprod_box2, frcomp_box, ravprod_box, nrow = 4, ncol=1)
+
+plot_grid(ravprod_box, frcomp_box_vv, frcomp_box_ss, nrow = 3, ncol=1)
+```
+
+Visualize community phenology across years
+```{r, echo = T, message = T, warning = F}
+# generate boxplot of prop of individuals flowering across years
+fli_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
+                  aes(x=as.factor(year),y=individuals))+
+                geom_boxplot(outlier.colour="lightgrey")+
+                theme_minimal(base_size=10) +
+                labs(x = 'year',y ='individual frequency', title = 'flowering')+
+                theme(legend.position = 'none')  +
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+# generate boxplot of prop of taxa flowering across years
+flsp_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
+                   aes(x=as.factor(year),y=sprich))+
+                geom_boxplot(outlier.colour="lightgrey")+
+                theme_minimal(base_size=10) +
+                labs(x = 'year',y ='species richness')+
+                theme(legend.position = 'none')  +
+                facet_wrap(~dataset, 
+                           nrow = 1, 
+                           ncol = 2, 
+                           strip.position = 'right')
+
+# generate boxplot of flower productivity across years
+flprod_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
+                     aes(x=as.factor(year),y=productivity))+
+                  geom_boxplot(outlier.colour="lightgrey")+
+                  theme_minimal(base_size=10) +
+                  labs(x = 'year',y ='productivity')+
+                  theme(legend.position = 'none')  +
+                  facet_wrap(~dataset, 
+                             nrow = 1, 
+                             ncol = 2, 
+                             strip.position = 'right')
+
+# generate boxplot of prop of individual fruiting across years
+fri_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
+                  aes(x=as.factor(year),y=individuals)) +
+              geom_boxplot(outlier.colour="lightgrey") +
+              theme_minimal(base_size=10) +
+              labs(x = 'year',y ='individual frequency', title = 'fruiting') +
+              theme(legend.position = 'none')  +
+              facet_wrap(~dataset, 
+                         nrow = 1, 
+                         ncol = 2, 
+                         strip.position = 'right')
+
+# generate boxplot of prop of taxa fruiting across years
+frsp_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
+                   aes(x=as.factor(year),y=sprich)) +
+              geom_boxplot(outlier.colour="lightgrey")+
+              theme_minimal(base_size=10) +
+              labs(x = 'year',y ='species richness')+
+              theme(legend.position = 'none')  +
+              facet_wrap(~dataset, 
+                         nrow = 1, 
+                         ncol = 2, 
+                         strip.position = 'right')
+
+# generate boxplot of fruit productivity across years
+frprod_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
+                     aes(x=as.factor(year),y=productivity))+
+                  geom_boxplot(outlier.colour="lightgrey") +
+                  theme_minimal(base_size=10) +
+                  labs(x = 'year',y ='productivity') +
+                  theme(legend.position = 'none') +
+                  facet_wrap(~dataset, 
+                             nrow = 1, 
+                             ncol = 2, 
+                             strip.position = 'right')
+
+plot_grid(fli_box, fri_box, flsp_box, frsp_box, flprod_box, frprod_box, nrow = 3, ncol=2)
+```
+
+Visualize phenology as time series across dates
+```{r, echo =T, message = F, warning=F}
+# plot time series of prop flowering individuals 
+fl_ploti <- ggplot(kphen_pop_fl, aes(x = Date, y = individuals)) +
+              geom_line(size = 1) +
+              geom_line(aes(x = Date, y =rain/1200), 
+                        linetype = 'solid', 
+                        colour = '#56B4E9',
+                        linewidth = 0.5) +
+              geom_line(aes(x = Date, y = rad/400000), 
+                        linetype = 'solid', 
+                        colour = '#E69F00',
+                        linewidth = 0.5) +
+              geom_line(aes(x = Date, y =temp/40), 
+                        linetype = 'solid', 
+                        colour = '#D55E00',
+                        linewidth = 0.5) +
+              scale_y_continuous(sec.axis = sec_axis(~.*1200, name = 'rain (mm)'), 
+                                 name = 'prop. of individuals') +
+              geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
+              geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+              scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                         to = as.Date('2019-12-31'),
+                                                         by = "1 year"), 
+                           date_labels = "%Y") +
+              theme_bw(base_size=10) +
+              theme(strip.background = element_blank(),
+                      strip.text.y = element_blank()) +
+              facet_wrap(~dataset,
+                         ncol=2, 
+                         strip.position = 'right', 
+                         scales = 'free_y')
+
+# plot time series of prop fruiting individuals 
+fr_ploti <- ggplot(kphen_pop_fr, aes(x = Date, y = individuals)) +
+                geom_line(size = 1) +
+                geom_line(aes(x = Date, y =rain/1200), 
+                          linetype = 'solid', 
+                          colour = '#56B4E9',
+                          linewidth = 0.5) +
+                geom_line(aes(x = Date, y = rad/400000), 
+                          linetype = 'solid', 
+                          colour = '#E69F00',
+                          linewidth = 0.5) +
+                geom_line(aes(x = Date, y =temp/40), 
+                          linetype = 'solid', 
+                          colour = '#D55E00',
+                          linewidth = 0.5) +
+                scale_y_continuous(sec.axis = sec_axis(~.*1200, name = 'rain (mm)'), 
+                                   name = 'prop. of individuals') +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_blank(),
+                        strip.text.y = element_blank()) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'right', 
+                           scales = 'free_y')
+
+# plot time series of prop flowering taxa
+fl_plotsp <- ggplot(kphen_pop_fl, aes(x = Date, y = sprich)) +
+                geom_line(size = 1) +
+                geom_line(aes(x = Date, y =rain/1800), 
+                          linetype = 'solid', 
+                          colour = '#56B4E9',
+                          linewidth = 0.7) +
+                geom_line(aes(x = Date, y = rad/600000), 
+                          linetype = 'solid', 
+                          colour = '#E69F00',
+                          linewidth = 0.7) +
+                geom_line(aes(x = Date, y =temp/60), 
+                          linetype = 'solid', 
+                          colour = '#D55E00',
+                          linewidth = 0.7) +
+                scale_y_continuous(sec.axis = sec_axis(~.*1800, name = 'temperature (C)'), 
+                                   name = 'prop. of taxa') +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_blank(),
+                        strip.text.y = element_blank()) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'right', 
+                           scales = 'free_y')
+
+# plot time series of prop fruiting taxa
+fr_plotsp <- ggplot(kphen_pop_fr, aes(x = Date, y = sprich))+
+                geom_line(size = 1) +
+                geom_line(aes(x = Date, y =rain/1800), 
+                          linetype = 'solid', 
+                          colour = '#56B4E9',
+                          linewidth = 0.7) +
+                geom_line(aes(x = Date, y = rad/600000), 
+                          linetype = 'solid', 
+                          colour = '#E69F00',
+                          linewidth = 0.7) +
+                geom_line(aes(x = Date, y =temp/60), 
+                          linetype = 'solid', 
+                          colour = '#D55E00',
+                          linewidth = 0.7) +
+                scale_y_continuous(sec.axis = sec_axis(~.*1800, name = 'temperature (C)'), 
+                                   name = 'prop. of taxa') +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_blank(),
+                        strip.text.y = element_blank()) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'right', 
+                           scales = 'free_y')
+
+# plot time series of flowering productivity
+fl_plotprod <- ggplot(kphen_pop_fl, aes(x = Date, y = productivity)) +
+                  geom_line(size = 1) +                
+                  geom_line(aes(x = Date, y =rain/4000), 
+                            linetype = 'solid', 
+                            colour = '#56B4E9',
+                            linewidth = 0.7) +
+                  geom_line(aes(x = Date, y = rad/1200000), 
+                            linetype = 'solid', 
+                            colour = '#E69F00',
+                            linewidth = 0.7) +
+                  geom_line(aes(x = Date, y =temp/300), 
+                            linetype = 'solid', 
+                            colour = '#D55E00',
+                            linewidth = 0.7) +
+                  scale_y_continuous(sec.axis = sec_axis(~.*4000, name = 'solar radiation'), 
+                                     name = 'prop. productivity') +
+                  geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                             to = as.Date('2019-12-31'),
+                                                             by = "1 year"), 
+                               date_labels = "%Y") +
+                  theme_bw(base_size=10) +
+                  theme(strip.background = element_blank(),
+                          strip.text.y = element_blank()) +
+                  facet_wrap(~dataset,
+                             ncol=2, 
+                             strip.position = 'right', 
+                             scales = 'free_y')
+
+fr_plotprod <- ggplot(kphen_pop_fr, aes(x = Date, y = productivity)) +
+                  geom_line(size = 1) +                
+                  geom_line(aes(x = Date, y =rain/4000), 
+                            linetype = 'solid', 
+                            colour = '#56B4E9',
+                            linewidth = 0.7) +
+                  geom_line(aes(x = Date, y = rad/1200000), 
+                            linetype = 'solid', 
+                            colour = '#E69F00',
+                            linewidth = 0.7) +
+                  geom_line(aes(x = Date, y =temp/300), 
+                            linetype = 'solid', 
+                            colour = '#D55E00',
+                            linewidth = 0.7) +
+                  scale_y_continuous(sec.axis = sec_axis(~.*4000, name = 'solar radiation'), 
+                                     name = 'prop. productivity') +
+                  geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                  geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                  scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                             to = as.Date('2019-12-31'),
+                                                             by = "1 year"), 
+                               date_labels = "%Y") +
+                  theme_bw(base_size=10) +
+                  theme(strip.background = element_blank(),
+                          strip.text.y = element_blank()) +
+                  facet_wrap(~dataset,
+                             ncol=2, 
+                             strip.position = 'right', 
+                             scales = 'free_y')
+
+# arrange figure and output 
+plot_grid(fl_ploti,fl_plotsp,fl_plotprod, fr_ploti,fr_plotsp,fr_plotprod, nrow = 6, ncol=1)
+
+# save plot
+ml <- marrangeGrob(list(fl_ploti,fl_plotsp,fl_plotprod, fr_ploti,fr_plotsp,fr_plotprod), nrow = 6, ncol=1)
+# save plot
+ggsave(file = paste0(figpath, '/comm_phen_timeseries_prop.png'),
+       plot = ml,
+       width = 6.5, 
+       height = 8, 
+       units = 'in')
+
+```
+
+Format data for GLMs\
+
+Respose variables:\
+individuals - prop of individuals flowering or fruiting\ 
+sprich - prop of taxa flowering or fruiting individuals\
+productivity - fruiting or flowering productivity (sum of phenology across individuals) \
+
+Covariates
+year - year
+rain - cumulative monthly rain (mm)\
+temp - average monthly temp (C)\
+rad - cumulative monthly solar radiation $(Wm^-2)$\
+transition - 0/1 indicates if the record occurs during the wet-to-dry season transition (October - December)
+
+```{r, echo = T, message = F, warning = F}
+# format covariates 
+# copy over tables
+comm_fr_std <- kphen_pop_fr
+comm_fl_std <- kphen_pop_fl
+
+# create an individual and species covariate as a metric of effort
+comm_fr_std$indi_cov <- comm_fr_std$individuals
+comm_fl_std$indi_cov <- comm_fl_std$individuals
+
+# normalize the continuous variables
+# calculates normalization for fruit phenology table 
+process <- preProcess(comm_fr_std[,c('rain','temp','rad','indi_cov')], method= 'range')
+
+# applies normalization
+comm_fr_std[,c('rain','temp','rad','indi_cov')] <- predict(process, comm_fr_std[,c('rain','temp','rad','indi_cov')])
+
+# calculates normalization for flower phenology table
+process <- preProcess(comm_fl_std[,c('rain','temp','rad','indi_cov')], method= 'range')
+
+# applies normalization
+comm_fl_std[,c('rain','temp','rad','indi_cov')] <- predict(process, comm_fl_std[,c('rain','temp','rad','indi_cov')])
+
+
+# get rid of records before 2010
+comm_fr_std <- comm_fr_std %>% filter(year > 2010)
+comm_fl_std <- comm_fl_std %>% filter(year > 2010)
+
+# set transition, year, month and dataset as factors
+comm_fr_std$year <- as.factor(comm_fr_std$year)
+comm_fl_std$year <- as.factor(comm_fl_std$year)
+comm_fr_std$month <- as.factor(comm_fr_std$month)
+comm_fl_std$month <- as.factor(comm_fl_std$month)
+comm_fr_std$transition <- as.factor(comm_fr_std$transition)
+comm_fl_std$transition <- as.factor(comm_fl_std$transition)
+comm_fr_std$dataset <- factor(comm_fr_std$dataset, levels =c('vvsw','sssw'))
+comm_fl_std$dataset <- factor(comm_fl_std$dataset, levels =c('vvsw','sssw'))
+
+# assign contrasts for incorporating categorical variables into GLM
+# treatment contrast with Vatovavy as reference
+contrasts(comm_fl_std$dataset) <- contr.treatment(levels(comm_fl_std$dataset)) 
+contrasts(comm_fr_std$dataset) <- contr.treatment(levels(comm_fr_std$dataset))
+
+# treatment contrast with period out of the dry-to-wet season transition as reference
+contrasts(comm_fl_std$transition) <- contr.treatment(levels(comm_fl_std$transition))
+contrasts(comm_fr_std$transition) <- contr.treatment(levels(comm_fr_std$transition))
+
+# sum-to-zero contrast 
+contrasts(comm_fl_std$year) <- contr.sum(levels(comm_fl_std$year))
+contrasts(comm_fr_std$year) <- contr.sum(levels(comm_fr_std$year))
+
+
+# transformation since flower productivity is 0 for one month in Sangasanga 
+# betareg can only support y in (0,1)
+y_betareg_format <- function(y){
+    n.obs <- sum(!is.na(y))
+    (y * (n.obs - 1) + 0.5) / n.obs
+}
+
+comm_fl_std$productivity_br <- y_betareg_format(comm_fl_std$productivity)
+
+# function to calculate pseudo R2 for poisson
+pseudor2 <- function(model){
+  return(1 - (model$deviance/model$null.deviance))
+}
+```
+
+Visualize response distributions
+```{r, echo = T, message = T, warning =F}
+par(mfrow = c(3,2))
+
+# Visualize flowering distributions
+# plot distribution of flowering productivity for Sangasanga
+hist(comm_fl_std$productivity[which(comm_fl_std$dataset =='sssw')], 
+     xlab = 'productivity', 
+     main = 'SS flowering')
+
+# plot distribution of flowering productivity for Vatovavy  
+hist(comm_fl_std$productivity[which(comm_fl_std$dataset =='vvsw')], 
+     xlab = 'productivity', 
+     main = 'VV flowering')
+
+# plot distribution of prop. of individuals flowering for Sangasanga
+hist(comm_fl_std$individuals[which(comm_fl_std$dataset =='sssw')], 
+     xlab = 'prop. of individuals', 
+     main = '')
+
+# plot distribution of prop. of individuals flowering for Vatovavy
+hist(comm_fl_std$individuals[which(comm_fl_std$dataset =='vvsw')], 
+     xlab = 'prop. of individuals', 
+     main = '')
+
+# plot distribution of prop. of taxa flowering for Sangasanga
+hist(comm_fl_std$sprich[which(comm_fl_std$dataset =='sssw')], 
+     xlab = 'prop. of taxa', 
+     main = '')
+
+# plot distribution of prop. of taxa flowering for Vatovavy
+hist(comm_fl_std$sprich[which(comm_fl_std$dataset =='vvsw')], 
+     xlab = 'prop. of taxa',
+     main = '')
+
+# Visualize fruiting distributions
+# plot distribution of fruiting productivity for Sangasanga
+hist(comm_fr_std$productivity[which(comm_fr_std$dataset =='sssw')], 
+     xlab = 'productivity', 
+     main = 'SS fruiting')
+
+# plot distribution of fruiting productivity for Vatovavy
+hist(comm_fr_std$productivity[which(comm_fr_std$dataset =='vvsw')], 
+     xlab = 'productivity', 
+     main = 'VV fruiting')
+
+# plot distribution of prop. of individuals fruiting for Sangasanga
+hist(comm_fr_std$individuals[which(comm_fr_std$dataset =='sssw')], 
+     xlab = 'prop. of individuals', 
+     main = '')
+
+# plot distribution of prop. of individuals fruiting for Vatovavy
+hist(comm_fr_std$individuals[which(comm_fr_std$dataset =='vvsw')], 
+     xlab = 'prop. of individuals', 
+     main = '')
+
+# plot distribution of prop. of taxa fruiting for Sangasanga
+hist(comm_fr_std$sprich[which(comm_fr_std$dataset =='sssw')], 
+     xlab = 'prop. of taxa', 
+     main = '')
+
+# plot distribution of prop. of taxa fruiting for Vatovavy
+hist(comm_fr_std$sprich[which(comm_fr_std$dataset =='vvsw')], 
+     xlab = 'prop. of taxa', 
+     main = '')
+
+```
+Look at interaction plots between dry-to-wet season transition and community
+```{r,echo=T,message=T, warning=F}
+par(mfrow = c(1,3))
+# interaction plot for flowering individuals 
+interaction.plot(comm_fl_std$dataset, 
+                 comm_fl_std$transition, 
+                 comm_fl_std$individuals, 
+                 col = 1:2, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'prop. of individuals')
+
+# interaction plot for flowering taxa
+interaction.plot(comm_fl_std$dataset, 
+                 comm_fl_std$transition, 
+                 comm_fl_std$sprich, 
+                 col = 1:2, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'prop. of taxa')
+
+# interaction plot for flowering productivity
+interaction.plot(comm_fl_std$dataset, 
+                 comm_fl_std$transition, 
+                 comm_fl_std$productivity, 
+                 col = 1:2, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'productivity')
+
+# # interaction plot for fruiting individuals 
+# interaction.plot(comm_fr_std$dataset, 
+#                  comm_fr_std$transition, 
+#                  comm_fr_std$individuals, 
+#                  col = 1:2, 
+#                  fixed =T,
+#                  xlab = 'community',
+#                  ylab = 'prop. of individuals')
+# 
+# # interaction plot for fruiting taxa
+# interaction.plot(comm_fr_std$dataset, 
+#                  comm_fr_std$transition, 
+#                  comm_fr_std$sprich, 
+#                  col = 1:2, 
+#                  fixed =T,
+#                  xlab = 'community',
+#                  ylab = 'prop. of taxa')
+# 
+# # interaction plot for fruiting productivity
+# interaction.plot(comm_fr_std$dataset, 
+#                  comm_fr_std$transition, 
+#                  comm_fr_std$productivity, 
+#                  col = 1:2, 
+#                  fixed =T,
+#                  xlab = 'community',
+#                  ylab = 'productivity')
+```
+no transition interactions for flower individual and species rich 
+slight transition interactions for productivity 
+transition interaction for fruit all metrics 
+
+Look at interaction plots between year and community
+```{r,echo=T,message=T, warning=F}
+par(mfrow = c(2,3))
+# interaction plot for flowering individuals 
+interaction.plot(comm_fl_std$dataset, 
+                 comm_fl_std$year, 
+                 comm_fl_std$individuals, 
+                 col = 1:9, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'prop. of individuals')
+
+# interaction plot for flowering taxa
+interaction.plot(comm_fl_std$dataset, 
+                 comm_fl_std$year, 
+                 comm_fl_std$sprich, 
+                 col = 1:9, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'prop. of taxa')
+
+# interaction plot for flowering productivity
+interaction.plot(comm_fl_std$dataset, 
+                 comm_fl_std$year, 
+                 comm_fl_std$productivity, 
+                 col = 1:9, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'productivity')
+
+# interaction plot for fruiting individuals 
+interaction.plot(comm_fr_std$dataset, 
+                 comm_fr_std$year, 
+                 comm_fr_std$individuals, 
+                 col = 1:9, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'prop. of individuals')
+
+# interaction plot for fruiting taxa
+interaction.plot(comm_fr_std$dataset, 
+                 comm_fr_std$year, 
+                 comm_fr_std$sprich, 
+                 col = 1:9, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'prop. of taxa')
+
+# interaction plot for fruiting productivity
+interaction.plot(comm_fr_std$dataset, 
+                 comm_fr_std$year, 
+                 comm_fr_std$productivity, 
+                 col = 1:9, 
+                 fixed =T,
+                 xlab = 'community',
+                 ylab = 'productivity')
+```
+year interactions for all flower and fruit metrics 
+
+Look at interaction plots between rain and community
+```{r,echo=T,message=T, warning=F}
+par(mfrow = c(2,3))
+# interaction plot for flowering individuals 
+interaction.plot(comm_fl_std$rain, 
+                 comm_fl_std$dataset, 
+                 comm_fl_std$individuals, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rain',
+                 xlab = 'prop. of individuals',
+                 legend = F)
+
+# interaction plot for flowering taxa
+interaction.plot(comm_fl_std$rain, 
+                 comm_fl_std$dataset, 
+                 comm_fl_std$sprich, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rain',
+                 xlab = 'prop. of taxa',
+                 legend = F)
+
+# interaction plot for flowering productivity
+interaction.plot(comm_fl_std$rain, 
+                 comm_fl_std$dataset,
+                 comm_fl_std$productivity, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rain',
+                 xlab = 'productivity',
+                 legend = F)
+
+# interaction plot for fruiting individuals 
+interaction.plot(comm_fr_std$rain,
+                 comm_fr_std$dataset, 
+                 comm_fr_std$individuals, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rain',
+                 xlab = 'prop. of individuals',
+                 legend = F)
+
+# interaction plot for fruiting taxa
+interaction.plot(comm_fr_std$rain,
+                 comm_fr_std$dataset, 
+                 comm_fr_std$sprich, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rain',
+                 xlab = 'prop. of taxa',
+                 legend = F)
+
+# interaction plot for fruiting productivity
+interaction.plot(comm_fr_std$rain, 
+                 comm_fr_std$dataset,
+                 comm_fr_std$productivity, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rain',
+                 xlab = 'productivity',
+                 legend = F)
+```
+rain interactions for all metrics
+
+Look at interaction plots between temperature and community
+```{r,echo=T,message=T, warning=F}
+par(mfrow = c(2,3))
+# interaction plot for flowering individuals 
+interaction.plot(comm_fl_std$temp, 
+                 comm_fl_std$dataset, 
+                 comm_fl_std$individuals, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'temp',
+                 xlab = 'prop. of individuals',
+                 legend = F)
+
+# interaction plot for flowering taxa
+interaction.plot(comm_fl_std$temp, 
+                 comm_fl_std$dataset, 
+                 comm_fl_std$sprich, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'temp',
+                 xlab = 'prop. of taxa',
+                 legend = F)
+
+# interaction plot for flowering productivity
+interaction.plot(comm_fl_std$temp, 
+                 comm_fl_std$dataset,
+                 comm_fl_std$productivity, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'temp',
+                 xlab = 'productivity',
+                 legend = F)
+
+# interaction plot for fruiting individuals 
+interaction.plot(comm_fr_std$temp,
+                 comm_fr_std$dataset, 
+                 comm_fr_std$individuals, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'temp',
+                 xlab = 'prop. of individuals',
+                 legend = F)
+
+# interaction plot for fruiting taxa
+interaction.plot(comm_fr_std$temp,
+                 comm_fr_std$dataset, 
+                 comm_fr_std$sprich, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'temp',
+                 xlab = 'prop. of taxa',
+                 legend = F)
+
+# interaction plot for fruiting productivity
+interaction.plot(comm_fr_std$temp, 
+                 comm_fr_std$dataset,
+                 comm_fr_std$productivity, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'temp',
+                 xlab = 'productivity',
+                 legend = F)
+```
+temp interactions for all metrics 
+
+Look at interaction plots between solar insolation and community
+```{r,echo=T,message=T, warning=F}
+par(mfrow = c(2,3))
+# interaction plot for flowering individuals 
+interaction.plot(comm_fl_std$rad, 
+                 comm_fl_std$dataset, 
+                 comm_fl_std$individuals, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rad',
+                 xlab = 'prop. of individuals',
+                 legend = F)
+
+# interaction plot for flowering taxa
+interaction.plot(comm_fl_std$rad, 
+                 comm_fl_std$dataset, 
+                 comm_fl_std$sprich, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rad',
+                 xlab = 'prop. of taxa',
+                 legend = F)
+
+# interaction plot for flowering productivity
+interaction.plot(comm_fl_std$rad, 
+                 comm_fl_std$dataset,
+                 comm_fl_std$productivity, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rad',
+                 xlab = 'productivity',
+                 legend = F)
+
+# interaction plot for fruiting individuals 
+interaction.plot(comm_fr_std$rad,
+                 comm_fr_std$dataset, 
+                 comm_fr_std$individuals, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rad',
+                 xlab = 'prop. of individuals',
+                 legend = F)
+
+# interaction plot for fruiting taxa
+interaction.plot(comm_fr_std$rad,
+                 comm_fr_std$dataset, 
+                 comm_fr_std$sprich, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rad',
+                 xlab = 'prop. of taxa',
+                 legend = F)
+
+# interaction plot for fruiting productivity
+interaction.plot(comm_fr_std$rad, 
+                 comm_fr_std$dataset,
+                 comm_fr_std$productivity, 
+                 col = 1:2, 
+                 fixed =T,
+                 ylab = 'rad',
+                 xlab = 'productivity',
+                 legend = F)
+```
+solar insolation interactions for all metrics
+
+GLM evaluation functions 
+```{r, echo = T, message = F, warning =F}
+# Function to generate AIC table and best model parameters
+aic_best <- function(models, stage, response, mtype = F){
+  # models: list of models
+  # stage: flower or fruit
+  # response: metric
+  # mtype: model distribution, mtype = T then beta model, mtype = F (default) then model is logistic
+  
+  # calculate AIC from list of models
+  aictab <- as.data.frame(aictab(models,sort=T, second.ord = T)) 
+  # if mtype is true, then use PseudoR2 function
+  if (mtype == T) {
+    aictab$pseudor2 <- unlist(lapply(models, PseudoR2)) # calculate pseudo R2 
+    aictab$pseudoR2 <- unlist(lapply(models, function(x) summary(x)$pseudo.r.squared)) # calculate pseudo R2
+  }
+  # else mtype is false and use pseudoR2 function
+  else {
+    aictab$pseudor2 <- unlist(lapply(models, pseudor2)) # calculate pseudo R2
+    aictab$pseudoR2 <- unlist(lapply(models, PseudoR2)) # calculate pseudo R2
+  }
+  # get best model identifier
+  bestid <- as.integer(rownames(aictab[1,]))
+
+  if (mtype == T){ # if beta model 
+    # extract the model parameter coefficient means   
+    best_df <- as.data.frame(rbind(summary(models[[bestid]])$coefficients$mean,
+                                   summary(models[[bestid]])$coefficients$precision))
+    
+    # calculate the model parameter 95% confidence intervals 
+    best_df <- cbind(best_df,confint(models[[bestid]]))
+  }
+  
+  else{ # else logistic model 
+    # extract the model parameter coefficient means and 95% confidence intervals
+    best_df <- as.data.frame(cbind(summary(models[[bestid]])$coefficients,
+                                   confint(models[[bestid]])))
+  }
+  # assign stage 
+  best_df$stage <- stage
+  # assign metric 
+  best_df$metric <- response
+  # save results
+  write.csv(aictab, 'aictab.csv')
+  # return the AIC table, best model paramtere summary and best model
+  return(list(aictab, best_df, models[[bestid]]))
+}
+
+
+# Function to plot residuals against fitted.values to test assumption of normality
+residual_plot <- function(mod, data, metric){
+  # mod: best model
+  # data: dataframe
+  # metric: response 
+  
+  # put calculated residuals and extracted fitted values in df
+  glm2_plot <- data.frame("predict" = mod$fitted.values, "res" = mod$fitted.values - data[,metric]) 
+  # title of the plot
+  tname <- paste("Predicted ", metric, " v. Residuals: \n", as.character(mod$call[1]), as.character(mod$call[2])) 
+  g <- ggplot(glm2_plot, aes(x = predict, y = res)) + 
+    geom_point(size = 2, color = "black") +
+    theme_bw(base_size = 10) + 
+    labs(title = tname, x = paste("predicted", metric), y = "residuals") # set the graph labels
+  return(g)
+}
+
+plot_fun <- function(mod, data, metric){
+  glm2_plot <- data.frame("predict" = mod$fitted.values, "res" = mod$fitted.values - data[,metric]) # put calculated residuals and extracted fitted values in df
+  tname <- paste("Predicted ", metric, " v. Residuals: \n", as.character(mod$call[1]), as.character(mod$call[2])) # title of the plot
+  g <- ggplot(glm2_plot, aes(x = predict, y = res)) + # select data
+    geom_point(size = 2, color = "black")+ # select points and set aesthetic parameters
+    theme_bw(base_size = 10) + # set the background theme
+    labs(title = tname, x = paste("predicted", metric), y = "residuals") # set the graph labels
+  return(g)
+}
+
+# Function to plot Q-Q plot and test normality
+norm_check <- function(model, data, metric){
+  # mod: best model
+  # data: dataframe
+  # metric: response 
+  
+  # plot Q-Q plot
+  qqnorm(model$fitted.values-data[,metric]) 
+  qqline(model$fitted.values-data[,metric])
+  # use Shapiro test to evaluate if the residuals are normally distributed
+  shapiro.test(model$fitted.values - data[,metric])
+}
+```
+
+**GLM for flowering individuals with community interactions**
+```{r, echo = T, message = T, warning =F}
+# using zero sum contrast on onset and years. Aliased: year 2019
+mod1 <- glm(individuals~rain*dataset +rad*dataset + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = n)
+
+mod2 <- glm(individuals~ rain*dataset +temp*dataset + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = n)
+
+mod3 <- glm(individuals~rain*dataset +rad + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = n)
+
+mod4 <- glm(individuals~rain*dataset +temp + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = n)
+
+mod5 <- glm(individuals~rain*dataset + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std,
+            weights = n)
+
+mod6 <- glm(individuals~rain*dataset + transition + year,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = n)
+
+mod7 <- glm(individuals~ transition + year,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = n)
+
+mod8 <- glm(individuals~ rain + transition + year,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = n)
+
+# generate aic and extract information from best model
+ikfli <- aic_best(list(mod1,mod2,mod3,mod4,mod5, mod6, mod7, mod8), 'flower','individual')
+
+# assign best model object
+fli_best <- ikfli[[3]] 
+
+# print aic table
+ikfli[[1]]
+
+# print summary of best model
+summary(fli_best)
+
+# plot residuals
+residual_plot(fli_best, comm_fl_std, 'individuals')
+
+# Q-Q plot & normality check 
+norm_check(fli_best, comm_fl_std, 'individuals')
+```
+Visualize relationship between individual flowering and best model variables
+```{r, echo = T, message = T, warning = F}
+# plot boxplot of prop. of individuals flowering within and outside of the dry-to-wet season transition
+flitran <- ggplot(kphen_pop_fl, aes(y = individuals, x = as.factor(transition), 
+                                    group = as.factor(transition))) +
+                geom_boxplot(aes()) +
+                theme_minimal() + 
+                ylab('proportion of individuals') +
+                xlab('') +
+                theme(legend.position = 'None',
+                      text = element_text(size = 8), 
+                      axis.text = element_text(size = 8)) +
+                scale_x_discrete(labels = c('Jan-Sep', 'Oct-Dec'))
+
+# plot boxplot of prop. of individuals flowering between communites
+flic <- ggplot(kphen_pop_fl, aes(y = individuals, x = dataset, group = dataset)) +
+            geom_boxplot(aes(color = dataset)) +
+            theme_minimal() + 
+            ylab('proportion of individuals') +
+            xlab('') +
+            theme(legend.position = 'None',
+                  text = element_text(size = 8), 
+                  axis.text = element_text(size = 8)) +
+            scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3')) +
+            scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
+  
+# plot estimated relationship between rain and prop. of individuals flowering 
+flir <- plot(ggpredict(fli_best, terms = c("rain[all]","dataset"), type = 'fe'),
+                        ci = T, 
+                        add.data =T, 
+                        colors = 'metro', 
+                        jitter = 0.0001, 
+                        show.legend= F,
+                        show.title = F, 
+                        dot.size=1,
+                        dot.alpha=0.2) +
+              xlab('cumulative monthly rainfall (mm)') +
+              ylab('proportion of individuals') +
+              scale_x_continuous(limits = c(0, 1), 
+                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
+              scale_y_continuous(limits = c(0, 0.4), 
+                                 labels = c(0,0.1,0.2,0.3,0.4)) +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8))
+
+# plot estimated relationship between temp and prop. of individuals flowering 
+flit <- plot(ggpredict(fli_best, terms = c("temp[all]","dataset"), type = 'fe'),
+                       ci = T, 
+                       add.data =T, 
+                       colors = 'metro', 
+                       jitter = 0.0001, 
+                       show.legend= F,
+                       show.title = F, 
+                       dot.size=1,
+                       dot.alpha=0.2) +
+              xlab('mean monthly temp (C)') +
+              ylab('proportion of individuals') +
+              scale_x_continuous(limits = c(0, 1), 
+                                 breaks = c(0, 0.217,0.399,0.58,0.76,0.947), labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fl$temp, na.rm =T)-min(kphen_pop_fl$temp, na.rm =T)) + min(kphen_pop_fl$temp, na.rm =T),0)) +
+              scale_y_continuous(limits = c(0, 0.4), 
+                                 labels = c(0,0.1,0.2,0.3,0.4)) +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8))
+
+# plot boxplot of prop. of individuals flowering across years
+fliy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = individuals, x = as.factor(year), color = dataset)) +
+              geom_boxplot(position = "dodge") +
+              theme_minimal() + 
+              ylab('proportion of individuals') +
+              xlab('') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
+
+# arrange plots into one figure and view
+grid.arrange(arrangeGrob(flic, flitran,flir,flit, ncol=4, nrow=1),
+         arrangeGrob(fliy, ncol=1, nrow=1),  
+         ncol = 1,nrow=2)
+                                         
+```
+
+**GLM for flower diversity with community interactions**
+```{r, echo = T, message = F, warning =F}
+# using zero sum contrast on onset and years. Aliased: year 2019
+mod1 <- glm(sprich~rain*dataset +rad*dataset + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = ns)
+
+mod2 <- glm(sprich~ rain*dataset +temp*dataset + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = ns)
+
+mod3 <- glm(sprich~ rain + transition + year*dataset,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = ns)
+
+mod4 <- glm(sprich~ rain + transition + year,
+            binomial('logit'),
+            data = comm_fl_std, 
+            weights = ns)
+
+# generate aic and extract information from best model
+ikflsp <- aic_best(list(mod1,mod2,mod3,mod4), 'flower','species')
+
+# assign best model object
+flsp_best <- ikflsp[[3]]
+
+# print aic table
+ikflsp[[1]]
+
+# print summary of best model
+summary(flsp_best)
+
+# plot residuals
+plot_fun(best_models[[3]], comm_fl_std, 'sprich')
+
+# Q-Q plot & normality check 
+norm_check(best_models[[3]], comm_fl_std, 'sprich') 
+```
+
+Visualize relationship between taxa flowering and best model variables
+```{r, echo = T, message = T, warning = F}
+# plot boxplot of prop. of taxa flowering within and outside of the dry-to-wet season transition
+flsptran <- ggplot(kphen_pop_fl, aes(y = sprich, x = as.factor(transition), group = as.factor(transition))) +
+                geom_boxplot(aes()) +
+                theme_minimal() + 
+                ylab('proportion of taxa') +
+                xlab('') +
+                theme(legend.position = 'None',
+                      text = element_text(size = 8), 
+                      axis.text = element_text(size = 8)) +
+                scale_x_discrete(labels = c('Jan-Sep', 'Oct-Dec'))
+
+# plot boxplot of prop. of taxa flowering between communities
+flspc <- ggplot(kphen_pop_fl, aes(y = sprich, x = dataset, group = dataset)) +
+            geom_boxplot(aes(color = dataset)) +
+            theme_minimal() + 
+            ylab('proportion of taxa') +
+            xlab('') +
+            theme(legend.position = 'None',
+                  text = element_text(size = 8), 
+                  axis.text = element_text(size = 8)) +
+            scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3')) +
+            scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
+
+# plot estimated relaitonship between rain and prop. of taxa flowering
+flspr <- plot(ggpredict(flsp_best, terms = c("rain[all]","dataset"), type = 'fe'),
+                        ci = T, 
+                        add.data =T, 
+                        colors = 'metro', 
+                        jitter = 0.0001, 
+                        show.legend= F,
+                        show.title = F, 
+                        dot.size=1,
+                        dot.alpha=0.2) +
+                xlab('cumulative monthly rainfall (mm)') +
+                ylab('proportion of taxa') +
+                theme(legend.position = 'None',
+                      text = element_text(size = 8), 
+                      axis.text = element_text(size = 8)) +
+                scale_x_continuous(limits = c(0, 1), 
+                                   labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
+                scale_y_continuous(limits = c(0, 0.5), 
+                                   labels = c(0,0.1,0.2,0.3,0.4,0.5))
+
+# plot boxplot of prop. of taxa flowering across years
+flspy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = sprich, x = as.factor(year), color = dataset)) +
+              geom_boxplot(position = "dodge") +
+              theme_minimal() + 
+              ylab('proportion of taxa') +
+              xlab('') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
+
+# arrange the plots and output
+grid.arrange(arrangeGrob(flspc, flsptran,flspr, ncol=3, nrow=1),
+             arrangeGrob(flspy, ncol=1, nrow=1),  
+             ncol = 1,
+             nrow = 2)
+```
+
+**GLM for flower productivity with community interactions (beta)**
+```{r, echo = T, message = F, warning =F}
+mod1 <- betareg(productivity_br~indi_cov + rain*dataset +rad*dataset + transition*dataset + year*dataset,
+                comm_fl_std, 
+                link = 'logit')
+
+mod2 <- betareg(productivity_br~indi_cov + rain*dataset +temp*dataset + transition*dataset + year*dataset,
+                comm_fl_std, 
+                link = 'logit')
+
+mod3 <- betareg(productivity_br~indi_cov + temp*dataset + transition + year*dataset, 
+                comm_fl_std, 
+                link = 'logit')
+
+mod4 <- betareg(productivity_br~indi_cov + temp*dataset + transition + year, 
+                comm_fl_std, 
+                link = 'logit')
+
+mod5 <- betareg(productivity_br~indi_cov + temp*dataset + transition, 
+                comm_fl_std, 
+                link = 'logit')
+
+mod6 <- betareg(productivity_br~indi_cov + temp*dataset, 
+                comm_fl_std, 
+                link = 'logit')
+
+mod7 <- betareg(productivity_br~rain*dataset +rad*dataset + transition + year*dataset,
+                comm_fl_std, 
+                link = 'logit')
+
+mod8 <- betareg(productivity_br~rain*dataset +temp*dataset + transition + year*dataset,
+                comm_fl_std, 
+                link = 'logit')
+
+
+mod9<- betareg(productivity_br~rain +temp*dataset + transition + year*dataset,
+                comm_fl_std, 
+                link = 'logit')
+
+mod10 <- betareg(productivity_br~temp*dataset + transition + year*dataset,
+                comm_fl_std, 
+                link = 'logit')
+
+mod11 <- betareg(productivity_br~temp*dataset + transition + year,
+                comm_fl_std, 
+                link = 'logit')
+
+mod12 <- betareg(productivity_br~temp*dataset + transition,
+                comm_fl_std, 
+                link = 'logit')
+
+mod13<- betareg(productivity_br~rain +temp*dataset + transition,
+                comm_fl_std, 
+                link = 'logit')
+
+
+# generate aic and extract information from best model
+ikflp <- aic_best(list(mod1,mod2,mod3,mod4,mod5,mod6,
+                       mod7,mod8,mod9,mod10,mod11,mod12,mod13), 'flower','productivity',T)
+
+# assign best model object
+flp_best <- ikflp[[3]]
+
+# print aic table
+ikflp[[1]]
+
+# print summary of best model
+summary(flp_best)
+
+# plot residuals
+plot_fun(flp_best, comm_fl_std, 'productivity_br')
+
+# Q-Q plot & normality check 
+norm_check(flp_best, comm_fl_std, 'productivity_br')
+
+write.csv(ikflp[[2]], 'comm_prod_noindi_glm_params.csv')
+```
+
+Visualize relationship between flowering productivity and best model variables
+```{r, echo = T, message = T, warning = F}
+# plot boxplot of flowering productivity within and outside of the dry-to-wet season transition
+flptran <- ggplot(kphen_pop_fl, aes(y = productivity, x = as.factor(transition), group = as.factor(transition))) +
+                geom_boxplot(aes()) +
+                theme_minimal() + 
+                ylab('productivity') +
+                xlab('') +
+                theme(legend.position = 'None',text = element_text(size = 8), 
+                      axis.text = element_text(size = 8)) +
+                scale_x_discrete(labels = c('Jan-Sep', 'Oct-Dec')) 
+
+# plot boxplot of flowering productivity between communities
+flpc <- ggplot(kphen_pop_fl, aes(y = productivity, x = dataset, group = dataset)) +
+              geom_boxplot(aes(color = dataset)) +
+              theme_minimal() + 
+              ylab('productivity') +
+              xlab('') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3')) +
+              scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
+
+# plot estimated relationship between temperature and flowering productivity
+flpt <- plot(ggpredict(flp_best, terms = c("temp[all]","dataset"), type = 'fe'),
+                       ci = T, 
+                       add.data =T, 
+                       colors = 'metro', 
+                       jitter = 0.0001, 
+                       show.legend= F,
+                                 show.title = F, 
+                       dot.size=1,
+                       dot.alpha=0.2) +
+              xlab('mean monthly temp (C)') +
+              ylab('productivity') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_x_continuous(limits = c(0, 1), 
+                                 breaks = c(0, 0.217,0.399,0.58,0.76,0.947), 
+                                 labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fl$temp, na.rm =T)-min(kphen_pop_fl$temp, na.rm =T)) + min(kphen_pop_fl$temp, na.rm =T),0))
+
+# plot estimated relationship between rain and flowering productivity
+flpr <- plot(ggpredict(flp_best, terms = c("rain[all]","dataset"), type = 'fe'),
+                        ci = T, 
+                        add.data =T, 
+                        colors = 'metro', 
+                        jitter = 0.0001, 
+                        show.legend= F,
+                        show.title = F, 
+                        dot.size=1,
+                        dot.alpha=0.2) +
+                xlab('cumulative monthly rainfall (mm)') +
+                ylab('productivity') +
+                theme(legend.position = 'None',
+                      text = element_text(size = 8), 
+                      axis.text = element_text(size = 8)) +
+                scale_x_continuous(limits = c(0, 1), 
+                                   labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
+                scale_y_continuous(limits = c(0, 0.5), 
+                                   labels = c(0,0.1,0.2,0.3,0.4,0.5))
+
+
+# plot estimated relationship between prop. of individuals and flowering productivity 
+# flpi <- plot(ggpredict(flp_best, terms = c("indi_cov[all]","dataset"), type = 'fe'),
+#                        ci = T, 
+#                        add.data =T, 
+#                        colors = 'metro', 
+#                        jitter = 0.0001, 
+#                        show.legend= F,
+#                        show.title = F, 
+#                        dot.size=1,
+#                        dot.alpha=0.2) +
+#           xlab('proportion of individuals') +
+#           ylab('productivity') +
+#           theme(legend.position = 'None',
+#                 text = element_text(size = 8), 
+#                 axis.text = element_text(size = 8)) +
+#           scale_x_continuous(limits = c(0, 1), 
+#                              labels = round(c(0, 0.245238,0.4904762, 0.7357143, 0.9809524)*(max(kphen_pop_fl$individuals, na.rm =T)-min(kphen_pop_fl$individuals, na.rm =T)) + min(kphen_pop_fl$individuals, na.rm =T),2))
+
+# plot boxplot of flowering productivity across years
+flpy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = productivity, x = as.factor(year), color = dataset)) +
+              geom_boxplot(position = "dodge") +
+              theme_minimal() +
+              ylab('productivity') +
+              xlab('') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
+
+# arrange plots and output 
+grid.arrange(arrangeGrob(flpc, flptran, flpt, flpr, ncol=4, nrow=1),
+         arrangeGrob(flpy, ncol=1, nrow=1),  
+         ncol=1,
+         nrow =2)
+```
+
+Combine flower phenology plots into a single figure 
+```{r, echo = T, message = T, warning = F}
+# arrange figure 
+fl_plots <- grid.arrange(arrangeGrob(flic, flitran,flir,flit, ncol=4, nrow=1),
+                         arrangeGrob(fliy, ncol=1, nrow=1),  
+                         arrangeGrob(flspc, flsptran,flspr, ncol=3, nrow=1),
+                         arrangeGrob(flspy, ncol=1, nrow=1),
+                         arrangeGrob(flpc, flptran, flpr, flpt, ncol=4, nrow=1),
+                         arrangeGrob(flpy, ncol=1, nrow=1),
+                         ncol = 1, 
+                         nrow =6)
+
+# save figure 
+ggsave(file = paste0(figpath, '/Fig2_30_09_2023.png'),plot = fl_plots,
+      width = 6.5, height = 9, units = 'in')
+```
+
+**GLM for fruiting individuals with community interactions**
+```{r, echo = T, message = F, warning =F}
+# using zero sum contrast on onset and years. Aliased: year 2019
+mod1 <- glm(individuals~rain*dataset +rad*dataset + year*dataset,
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = n)
+
+mod2 <- glm(individuals~rain*dataset +temp*dataset + year*dataset,
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = n)
+
+mod3 <- glm(individuals~rain +rad*dataset + year*dataset,
+            binomial('logit'),
+            data = comm_fr_std,
+            weights = n)
+
+mod4 <- glm(individuals~rain +temp*dataset + year*dataset,
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = n)
+
+# generate aic and extract information from best model
+ikfri <- aic_best(list(mod1,mod2,mod3,mod4), 'fruit','individual')
+
+# assign best model object
+fri_best <- ikfri[[3]] 
+
+# print aic table
+ikfri[[1]]
+
+# print summary of best model
+summary(fri_best)
+
+# plot residuals
+plot_fun(best_models[[2]], comm_fr_std, 'individuals')
+
+# Q-Q plot & normality check 
+norm_check(best_models[[2]], comm_fr_std, 'individuals') 
+```
+
+```{r, echo = T, message = F, warning =F}
+# plot boxplot of prop. fruiting individuals between communities
+fric <- ggplot(kphen_pop_fr, aes(y = individuals, x = dataset, group = dataset)) +
+          geom_boxplot(aes(color = dataset)) +
+          theme_minimal() + 
+          ylab('proportion of individuals') +
+          xlab('') +
+          theme(legend.position = 'None',
+                text = element_text(size = 8), 
+                axis.text = element_text(size = 8)) +
+          scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3')) +
+          scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
+  
+# plot estimated relaitonship between rain and prop. of individuals fruiting
+frir <- plot(ggpredict(fri_best, terms = c("rain[all]","dataset"), type = 'fe'),
+                       ci = T, 
+                       add.data =T, 
+                       colors = 'metro', 
+                       jitter = 0.0001, 
+                       show.legend= F,
+                       show.title = F, 
+                       dot.size=1,
+                       dot.alpha=0.2) +
+              xlab('cumulative monthly rainfall (mm)') +
+              ylab('proportion of individuals') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_x_continuous(limits = c(0, 1), 
+                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
+              scale_y_continuous(limits = c(0, 0.4), 
+                                 labels = c(0,0.1,0.2,0.3,0.4))
+
+# plot estimated relaitonship between temperature and prop. of individuals fruiting
+frit <- plot(ggpredict(fri_best, terms = c("temp[all]","dataset"), type = 'fe'),
+                       ci = T, 
+                       add.data =T, 
+                       colors = 'metro', 
+                       jitter = 0.0001, 
+                       show.legend= F,
+                       show.title = F, 
+                       dot.size=1,
+                       dot.alpha=0.2) +
+            xlab('mean monthly temp (C)') +
+            ylab('proportion of individuals') +
+            theme(legend.position = 'None',
+                  text = element_text(size = 8), 
+                  axis.text = element_text(size = 8)) +
+             scale_x_continuous(limits = c(0, 1), 
+                                breaks = c(0, 0.217,0.399,0.58,0.76,0.947), 
+                                labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fr$temp, na.rm =T)-min(kphen_pop_fr$temp, na.rm =T)) + min(kphen_pop_fr$temp, na.rm =T),0)) +
+            scale_y_continuous(limits = c(0, 0.4), 
+                               labels = c(0,0.1,0.2,0.3,0.4))
+
+# plot boxplot of prop. fruiting individuals across years
+friy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = individuals, x = as.factor(year), color = dataset)) +
+              geom_boxplot(position = "dodge") +
+              theme_minimal() + 
+              ylab('proportion of individuals') +
+              xlab('') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
+
+# arrange plots and output
+grid.arrange(arrangeGrob(fric, frir,frit, ncol=3, nrow=1),
+         arrangeGrob(friy, ncol=1, nrow=1), 
+         ncol = 1,
+         nrow = 2)
+                                                    
+```
+
+**GLM for fruit taxa with community interactions**
+```{r, echo = T, message = F, warning =F}
+# using zero sum contrast on onset and years. Aliased: year 2019
+mod1 <- glm(sprich~rain*dataset +rad*dataset + year*dataset,
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = ns)
+
+mod2 <- glm(sprich~ rain*dataset +temp*dataset + year*dataset,
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = ns)
+
+mod3 <- glm(sprich~ rain + year*dataset, 
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = ns)
+
+mod4 <- glm(sprich~ rain + year + dataset, 
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = ns)
+
+mod5 <- glm(sprich~ rain + year,
+            binomial('logit'),
+            data = comm_fr_std, 
+            weights = ns)
+
+# generate aic and extract information from best model
+ikfrsp <- aic_best(list(mod1,mod2,mod3,mod4,mod5), 'fruit','species')
+
+# assign best model object
+frsp_best <- ikfrsp[[3]]
+
+# print aic table
+ikfrsp[[1]]
+
+# print summary of best model
+summary(frsp_best)
+
+# plot residuals
+plot_fun(best_models[[4]], comm_fr_std, 'sprich')
+
+# Q-Q plot & normality check 
+norm_check(best_models[[4]], comm_fr_std, 'sprich') 
+```
+
+```{r, echo = T, message = F, warning =F}
+# plot boxplot of prop. fruiting taxa between communities
+frspc <- ggplot(kphen_pop_fr, aes(y = sprich, x = dataset, group = dataset)) +
+            geom_boxplot(aes(color = dataset)) +
+            theme_minimal() + 
+            ylab('proportion of taxa') +
+            xlab('') +
+            theme(legend.position = 'None',
+                  text = element_text(size = 8), 
+                  axis.text = element_text(size = 8)) +
+            scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3')) +
+            scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
+  
+# plot estimated relaitonship between rain and prop. of taxa fruiting
+frspr <- plot(ggpredict(frsp_best, terms = c("rain[all]","dataset"), type = 'fe'),
+                        ci = T, 
+                        add.data =T, 
+                        colors = 'metro', 
+                        jitter = 0.0001, 
+                        show.legend= F,
+                        show.title = F, 
+                        dot.size=1,
+                        dot.alpha=0.2) +
+              xlab('cumulative monthly rainfall (mm)') +
+              ylab('proportion of taxa') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_x_continuous(limits = c(0, 1), 
+                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fr$rain, na.rm =T)-min(kphen_pop_fr$rain, na.rm =T)) + min(kphen_pop_fr$rain, na.rm =T),0)) +
+              scale_y_continuous(limits = c(0, 0.5), 
+                                 labels = c(0,0.1,0.2,0.3,0.4,0.5))
+
+# plot boxplot of prop. fruiting taxa across years
+frspy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = sprich, x = as.factor(year), color = dataset)) +
+              geom_boxplot(position = "dodge") +
+              theme_minimal() + 
+              ylab('proportion of taxa') +
+              xlab('') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
+
+# arrange plots and output
+grid.arrange(arrangeGrob(frspc, frspr, ncol=2, nrow=1),
+         arrangeGrob(frspy, ncol=1, nrow=1),  
+         ncol = 1,
+         nrow =2)
+```
+
+**GLM for fruit productivity with community interactions (beta)**
+```{r, echo = T, message = F, warning =F}
+mod1 <- betareg(productivity~indi_cov + rain*dataset +rad*dataset + year*dataset,
+             comm_fr_std, 
+             link = 'logit')
+
+mod2 <- betareg(productivity~indi_cov + rain*dataset +temp*dataset + year*dataset,
+              comm_fr_std, 
+              link = 'logit')
+
+mod3 <- betareg(productivity~indi_cov +temp*dataset + year*dataset,
+              comm_fr_std, 
+              link = 'logit')
+
+mod4 <- betareg(productivity~indi_cov + temp + year*dataset,
+              comm_fr_std, 
+              link = 'logit')
+
+mod5 <- betareg(productivity~indi_cov + year*dataset,
+              comm_fr_std, 
+              link = 'logit')
+
+mod6 <- betareg(productivity~indi_cov + temp*dataset + year,
+              comm_fr_std, 
+              link = 'logit')
+
+mod7 <- betareg(productivity~indi_cov + temp*dataset,
+              comm_fr_std, 
+              link = 'logit')
+
+mod8 <- betareg(productivity~rain*dataset +rad*dataset + year*dataset,
+             comm_fr_std, 
+             link = 'logit')
+
+mod9 <- betareg(productivity~rain*dataset +temp*dataset + year*dataset,
+             comm_fr_std, 
+             link = 'logit')
+
+mod10 <- betareg(productivity~rain +rad + year*dataset,
+             comm_fr_std, 
+             link = 'logit')
+
+mod11 <- betareg(productivity~rain +temp + year*dataset,
+             comm_fr_std, 
+             link = 'logit')
+
+mod12 <- betareg(productivity~rain + year*dataset,
+             comm_fr_std, 
+             link = 'logit')
+
+mod13 <- betareg(productivity~ year*dataset,
+             comm_fr_std, 
+             link = 'logit')
+
+# generate aic and extract information from best model
+ikfrp <- aic_best(list(#mod1,mod2,mod3,mod4,mod5,mod6,mod7,
+                       mod8,mod9,mod10,mod11,mod12,mod13), 'fruit','productivity',T)
+
+# assign best model object
+frp_best <- ikfrp[[3]]
+
+# print aic table
+ikfrp[[1]]
+
+# print summary of best model
+summary(frp_best)
+
+# plot residuals
+plot_fun(frp_best, comm_fr_std, 'productivity')
+
+# Q-Q plot & normality check 
+norm_check(frp_best, comm_fr_std, 'productivity')
+
+
+write.csv(ikfrp[[2]], 'comm_prod_fruit_noindi_glm_params.csv')
+```
+
+```{r, echo = T, message = F, warning =F}
+# plot boxplot of fruiting productivity between communities
+frpc <- ggplot(kphen_pop_fr, aes(y = productivity, x = dataset, group = dataset)) +
+            geom_boxplot(aes(color = dataset)) +
+            theme_minimal() + 
+            ylab('productivity') +
+            xlab('') +
+            theme(legend.position = 'None',
+                  text = element_text(size = 8), 
+                  axis.text = element_text(size = 8)) +
+            scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3')) +
+            scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
+  
+# plot estimated relationship between temperature and fruiting productivity
+# frpt <- plot(ggpredict(frp_best, terms = c("temp[all]","dataset"), type = 'fe'),
+#                        ci = T, 
+#                        add.data =T, 
+#                        colors = 'metro', 
+#                        jitter = 0.0001, 
+#                        show.legend= F,
+#                        show.title = F, 
+#                        dot.size=1,
+#                        dot.alpha=0.2) +
+#               xlab('mean monthly temp (C)') +
+#               ylab('productivity') +
+#               theme(legend.position = 'None',
+#                     text = element_text(size = 8), 
+#                     axis.text = element_text(size = 8)) +
+#               scale_x_continuous(limits = c(0, 1), 
+#                                  breaks = c(0, 0.217,0.399,0.58,0.76,0.947), 
+#                                  labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fr$temp, na.rm =T)-min(kphen_pop_fr$temp, na.rm =T)) + min(kphen_pop_fr$temp, na.rm =T),0))
+
+# plot estimated relationship between rain and fruiting productivity
+frpr <- plot(ggpredict(frp_best, terms = c("rain[all]","dataset"), type = 'fe'),
+                        ci = T, 
+                        add.data =T, 
+                        colors = 'metro', 
+                        jitter = 0.0001, 
+                        show.legend= F,
+                        show.title = F, 
+                        dot.size=1,
+                        dot.alpha=0.2) +
+              xlab('cumulative monthly rainfall (mm)') +
+              ylab('productivity') +
+              theme(legend.position = 'None',
+                    text = element_text(size = 8), 
+                    axis.text = element_text(size = 8)) +
+              scale_x_continuous(limits = c(0, 1), 
+                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fr$rain, na.rm =T)-min(kphen_pop_fr$rain, na.rm =T)) + min(kphen_pop_fr$rain, na.rm =T),0)) +
+              scale_y_continuous(limits = c(0, 0.5), 
+                                 labels = c(0,0.1,0.2,0.3,0.4,0.5))
+
+
+# plot estimated relationship between prop. of fruiting individuals and fruiting productivity
+# frpi <- plot(ggpredict(frp_best, terms = c("indi_cov[all]","dataset"), type = 'fe'),
+#                        ci = T, 
+#                        add.data =T, 
+#                        colors = 'metro', 
+#                        jitter = 0.0001, 
+#                        show.legend= F,
+#                        show.title = F, 
+#                        dot.size=1,
+#                        dot.alpha=0.2) +
+#                   xlab('proportion of individuals') +
+#                   ylab('productivity') +
+#                   theme(legend.position = 'None',
+#                         text = element_text(size = 8), 
+#                         axis.text = element_text(size = 8)) +
+#                   scale_x_continuous(limits = c(0, 1), 
+#                                      breaks = c(0.12208672,  0.33631436,  0.55054201,  0.76476965,  0.97899729),
+#                                      labels = round(c(0.12208672,  0.33631436,  0.55054201,  0.76476965,  0.97899729)*(max(kphen_pop_fr$individuals, na.rm =T)-min(kphen_pop_fr$individuals, na.rm =T)) + min(kphen_pop_fr$individuals, na.rm =T),2))
+
+# plot boxplot of fruiting productivity across years
+frpy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = productivity, x = as.factor(year), color = dataset)) +
+            geom_boxplot(position = "dodge") +
+            theme_minimal() + 
+            ylab('productivity') +
+            xlab('') +
+            theme(legend.position = 'None',
+                  text = element_text(size = 8), 
+                  axis.text = element_text(size = 8)) +
+            scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
+
+# arrange plots and output
+grid.arrange(arrangeGrob(frpc, frpt, frpi, ncol=3, nrow=1),
+         arrangeGrob(frpy, ncol=1, nrow=1), 
+         ncol = 1,
+         nrow = 2)
+```
+
+Combine fruit phenology plots into a single figure 
+```{r, echo = T, message = T, warning = F}
+fr_plots <- grid.arrange(arrangeGrob(fric, frir,frit, ncol=3, nrow=1),
+                         arrangeGrob(friy, ncol=1, nrow=1),  
+                         arrangeGrob(frspc, frspr, ncol=2, nrow=1),
+                         arrangeGrob(frspy, ncol=1, nrow=1),
+                        # arrangeGrob(frpc, frpt, frpi, ncol=3, nrow=1),
+                         arrangeGrob(frpc, frpr, ncol=2, nrow=1),
+                         arrangeGrob(frpy, ncol=1, nrow=1),
+                         ncol = 1, 
+                         nrow =6)
+
+# save figure 
+ggsave(file = paste0(figpath, '/Fig3.png'),plot = fr_plots,
+      width = 6.5, height = 9, units = 'in')
+```

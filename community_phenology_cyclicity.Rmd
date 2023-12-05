@@ -1,0 +1,1354 @@
+---
+title: "community_phenology"
+author: "Jannet Vu"
+date: "10/26/2022"
+output: html_document
+---
+Manuscript title: Temperature and rainfall seasonality drives tropical community phenology in southeastern Madagascar
+
+**Goal is to characterize the reproductive phenological cycle (flower and fruit) of plants in Kianjavato at the individual and species level at the monthly scale**\
+1) identify the dominant cycle flowering and fruiting frequency (continuous, sub-annual, annual, supra-annual)\
+2) calculate the flowering and fruiting cycle length, duration and interval \
+3) assess the regularity of flowering and fruiting 
+
+#### Set up working environment
+First set up working environment and load in relevant files
+```{r, setup, echo=T, message=FALSE, warning=FALSE}
+# set working directory for all chunks
+setwd("C:/Users/Jannet/Documents/Dissertation/data")
+knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/data") 
+```
+
+
+```{r, setup, echo=T, message=FALSE, warning=FALSE}
+#load in packages
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(reshape)
+library(doParallel)
+library(gridExtra)
+library(cowplot)
+library(chisq.posthoc.test)
+
+# set up working directory 
+setwd("C:/data")
+
+# set up directory to save figures
+figpath <- "C:/figures"
+
+# detect cores for parallel computing
+numcores <- detectCores() -1
+registerDoParallel(numcores) # register cores
+
+# list of month labels 
+mthname <- c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
+# load appropriate files
+# data for plant vernacular and Latin names
+plant_names <- read.csv('phen_plantnames.csv', header= T, stringsAsFactors = F) # local plant and Latin names
+
+# data for characterizing individual fruiting cycles
+kphen_fr <- read.csv('kian_phen_individual_fruit.csv', header =T, stringsAsFactors = F)[,-1]
+kphen_fr$Date <- as.Date(kphen_fr$Date, tz = 'Africa/Nairobi')
+
+# data for characterizing individual flowering cycles
+kphen_fl <- read.csv('kian_phen_individual_flower.csv', header = T, stringsAsFactors = F)[,-1]
+kphen_fl$Date <- as.Date(kphen_fl$Date, tz = 'Africa/Nairobi')
+```
+columns:\
+species - vernacular name\
+year - year\
+month - month\
+dataset - forest identifier (sssw - sangasanga, vvvw - vatovavy)\
+Tag - individual identifier\
+Plot- survey plot\
+Fu - unripe fruit phenology (0-4)\
+Fr - ripe fruit phenology (0-4)\
+FuFr - fruit phenology (0-4)\
+Fl - flower phenology (0-4)\
+fruit - absence/presence of fruit\
+flower - absence/presence of flower \
+Date - date
+monthname - categorical month name
+Latin - scientific name(s)\
+multispecies - indicates the taxonomic ambiguity, FALSE = single species, TRUE = multiple species, AMB - single species, but uncertain which species
+
+```{r, echo = T, warning = F, message = F}
+head(kphen_fr) # visualize to get sense of data
+```
+
+**What is the starting sample size for the individual analyses?**\
+Data on fruiting phenology was collected on: `r length(unique(kphen_fr$Tag))` individuals from `r length(unique(kphen_fr$Species))` taxa.\
+Date on flowering phenology was collected on: `r length(unique(kphen_fl$Tag))` individuals from `r length(unique(kphen_fl$Species))` species.\
+
+```{r, echo = T, warning = F, message = F}
+# load in species level phenology data 
+kphen_sp_fr <- read.csv('kian_phen_popspecies_fruit_sync.csv', header= T, stringsAsFactors = F)[,-1] 
+kphen_sp_fr$Date <- as.Date(kphen_sp_fr$Date, tz = 'Africa/Nairobi')
+
+kphen_sp_fl <- read.csv('kian_phen_popspecies_flower_sync.csv', header= T, stringsAsFactors = F)[,-1]
+kphen_sp_fl$Date <- as.Date(kphen_sp_fl$Date, tz = 'Africa/Nairobi')
+```
+columns:\
+year - year\
+month - month\
+monthname - categorical month name\
+Date - date \
+species - vernacular name \
+dataset - forest identifier (sssw - sangasanga, vvvw - vatovavy)\
+Latin - scientific name\
+multispecies - indicates the taxonomic ambiguity, FALSE = single species, TRUE = multiple species, AMB - single species, but uncertain which species
+n - number of individuals sampled
+Fl or FuFr - flower or fruit phenology (0-4)\
+flower or fruit - absence/presence of flower or fruit\
+flower_prop or fruit_prop - proportion of individuals flowering or fruiting
+
+```{r, echo = T, warning = F, message = F}
+head(kphen_sp_fr) # visualize to get sense of data
+```
+
+**What is the starting sample size for the species analyses?**\
+The fruiting phenology of at least 3 individuals was recorded for `r length(unique(kphen_sp_fr$Species))` species.\
+The flowering phenology of at least 3 individuals was recorded for `r length(unique(kphen_sp_fl$Species))` species.
+
+Merge flowering fruiting individual and species tables
+```{r, echo = T, warning = F, message = F}
+# assign phenology attributes before merging tables 
+kphen_fl$stage <- 'flower'
+kphen_fr$stage <- 'fruit'
+kphen_sp_fl$stage <- 'flower'
+kphen_sp_fr$stage <- 'fruit'
+# assign tag as the forest species was sampled since species doesn't have tag number
+kphen_sp_fl$Tag <- kphen_sp_fl$dataset
+kphen_sp_fr$Tag <- kphen_sp_fr$dataset
+
+# assign flower prop and fruit prop for individual as NA before merging, since it doesn't exist for individuals
+kphen_fl$flower_prop <- NA
+kphen_fr$fruit_prop <- NA
+
+# merge flower individual and species tables first 
+# list out relevant columns to merge by
+relecols <- c('species','year','month','dataset','Tag','Fl','flower',
+              'flower_prop','Date','monthname','Latin','multispecies','stage')
+fl_merge <- rbind(kphen_fl[,relecols], kphen_sp_fl[,relecols]) # row bind flowering species and individual data 
+colnames(fl_merge)[6:8] <- c('productivity','presence','proportion') # rename columns
+
+# merge fruit individual and species tables next 
+relecols <- c('species','year','month','dataset','Tag','FuFr','fruit',
+              'fruit_prop','Date','monthname','Latin','multispecies','stage')
+fr_merge <- rbind(kphen_fr[,relecols], kphen_sp_fr[,relecols]) # row bind fruiting species and individual data 
+colnames(fr_merge)[6:8] <- c('productivity','presence','proportion') # rename columns
+
+# merge fruit and flower individual and species data together 
+phen_merged <- rbind(fl_merge, fr_merge)
+
+# generate table of of the cycle characterization for each individual
+# assign unique identifier
+phen_merged$ID <- sapply(1:nrow(phen_merged), 
+                         function(x) paste0(phen_merged[x,c('species','Tag','stage')], collapse ="_"))
+
+phen_merged <- arrange(phen_merged, ID, Date) # order the table 
+```
+
+Visualize sample species phenology 
+```{r, echo = T, warning = F, message = F}
+# get a random species
+subsp <- sample(phen_merged$species, 1) 
+# subset out sample species flowering data 
+subdf <- phen_merged[which(phen_merged$species == subsp),]
+subdf <- arrange(subdf, Date) # arrange chronologically
+
+# plot time series of sample species flower productivity  
+fl_plot <- ggplot(subdf %>% filter(stage == 'flower'),aes(x=Date,y=productivity))+
+                geom_line(aes(color = dataset), size = 1)+
+                ylab("productivity") +
+                xlab("") +
+                theme(legend.position="bottom",
+                      panel.background = element_rect(fill = 'white',colour = 'black'),
+                      panel.grid.major.x =  element_line(colour = "grey80"),
+                      panel.grid.minor.x = element_line(colour = "grey80")) +
+                facet_wrap(~Tag,ncol=1, strip.position = 'right', scales = 'free_y')+
+                scale_color_brewer(palette = 'Accent') +
+                ggtitle(paste(subsp, 'flower'))
+
+# plot time series of sample species fruit productivity  
+fr_plot <- ggplot(subdf %>% filter(stage == 'fruit'),aes(x=Date,y=productivity))+
+                geom_line(aes(color = dataset), size = 1)+
+                ylab("presence")+
+                xlab("")+
+                theme(legend.position="bottom") + 
+                theme(panel.background = element_rect(fill = 'white',colour = 'black'),
+                panel.grid.major.x =  element_line(colour = "grey80"),
+                panel.grid.minor.x = element_line(colour = "grey80")) +
+                facet_wrap(~Tag,ncol=1, strip.position = 'right', scales = 'free_y')+
+                scale_color_brewer(palette = 'Accent') +
+                ggtitle(paste(subsp, 'fruit'))
+
+# plot sample flower and fruit productivity side by side
+grid.arrange(fl_plot,fr_plot,
+             nrow = 1, 
+             ncol = 2)
+```
+
+Function to calculate phenological cycle duration, interval and length for each individual and species
+```{r,echo = T,warning=F,message = F}
+cycle_quant <- function(cycle_component, ID){
+  # cycle_component: run length encoder that calculates number 
+  # consecutive flowering/fruiting months (duration) and nonflowering/nonfruiting months (intervals)
+  # ID: unique individual or species identifier
+  # get number of intervals and durations
+  # extract out whether the cycle length pertains to a flowering interval (0) or duration 1)
+  cycle_values <- cycle_component$values
+  # extract out the number of months for each flowering duration/interval
+  cycle_lengths <- cycle_component$lengths
+  
+  # get number of cycle components
+  num_cycles <- length(cycle_component$lengths) 
+  # get number of flowering/fruiting durations (as indicated by a value of 1)
+  on_months <- sum(cycle_component$lengths[which(cycle_component$values == 1)]) 
+  # get number of flowering/fruiting intervals (as indicated by a value of 0)
+  off_months <- sum(cycle_component$lengths[which(cycle_component$values == 0)])
+  # get number of episodes (an episode is a full cycle, 
+  # which includes a duration of flowering/fruiting and nonflowering/nonfruiting
+  episodes <- floor((on_months + off_months)/2)
+  episodes <- sum(cycle_component$values,na.rm =T) 
+  
+  # summarize cycle characteristics
+  if (length(cycle_lengths) < 2) { # if there is less than 2 cycles  
+    # don't have full cycle, set to NA
+    cycle_df <- data.frame(ID = ID, 
+                           episodes = episodes,
+                           cycle_num = 0, 
+                           total_duration = on_months, 
+                           total_interval = off_months,
+                           cycle_duration = on_months, 
+                           cycle_interval = off_months,
+                           start = NA) # start "on" indicates that a record 
+                                       # started with an active flowering or fruiting period
+                                       # and "off indicates that a record started with a 
+                                       # nonflowering or nonfruiting period
+    print('cycle length too short to quantify')
+  }
+  
+  else { # if there is more than 2 cycles
+    if (cycle_values[1] == 0) { # if the first entry is a nonfruiting or nonflowering period
+      # drop the first records to ensure the sequence starts 
+      # with a active fruiting or flowering period
+      cycle_lengths <- cycle_lengths[2:length(cycle_lengths)] 
+      cycle_values <- cycle_values[2:length(cycle_values)]
+      print('drop first nonfruiting, nonflowering record')
+      
+      if (length(cycle_lengths) < 2) { # if the number of periods is fewer than two 
+        # don't have full cycle, set to NA
+        cycle_df <- data.frame(ID = ID, 
+                               episodes = episodes, 
+                               cycle_num = 0, 
+                               total_duration = on_months, 
+                               total_interval = off_months,
+                               cycle_duration = on_months, 
+                               cycle_interval = off_months,
+                               start = 'off')
+        print('cycle length too short to quantify')
+      }
+      
+      else{
+        if (length(cycle_values) %% 2 == 1){ # if the number of periods is odd
+          # drop last record to ensure full cycles
+          cycle_lengths <- cycle_lengths[1:(length(cycle_lengths)-1)] 
+          cycle_values <- cycle_values[1:(length(cycle_values)-1)]
+          print('number of periods was odd so dropped last period')
+        }
+        cycle_number <- sum(cycle_values) # get number of cycles
+        cycle_df <- data.frame(ID =ID, 
+                               episodes = episodes, 
+                               cycle_num = 1:cycle_number, # assign cycle ID 
+                               total_duration = on_months, 
+                               total_interval = off_months,
+                               # get each cycle duration
+                               cycle_duration = cycle_lengths[seq(1,length(cycle_lengths),2)], 
+                               # get each cycle interval
+                               cycle_interval = cycle_lengths[seq(2,length(cycle_lengths),2)],
+                               start ='off') 
+        print('quantified cycle')
+      }
+    }
+    
+    else { # else if the first entry is a fruiting or flowering period 
+      if (length(cycle_values) %% 2 == 1) { # if the number of periods is odd
+          # drop last record to ensure full cycles
+          cycle_lengths <- cycle_lengths[1:(length(cycle_lengths)-1)] 
+          print(length(cycle_lengths))
+          cycle_values <- cycle_values[1:(length(cycle_values)-1)]
+          print('number of periods was odd so dropped last period')
+      }
+      cycle_number <- sum(cycle_values) # get number of cycles
+      cycle_df <- data.frame(ID = ID, 
+                             episodes = episodes, 
+                             cycle_num = 1:cycle_number, # assign cycle ID 
+                             total_duration = on_months, 
+                             total_interval = off_months,
+                             # get each cycle duration
+                             cycle_duration = cycle_lengths[seq(1,length(cycle_lengths),2)], 
+                             # get each cycle interval
+                             cycle_interval = cycle_lengths[seq(2,length(cycle_lengths),2)],
+                             start ='on') 
+      print('quantified cycle')
+    }
+  }
+  cycle_df$cycle_length <- cycle_df$cycle_duration + cycle_df$cycle_interval # calculate cycle length
+  return(cycle_df) # output the table 
+}
+```
+
+```{r, echo = T, warning = F, message = F}
+# calculate cycle characteristics in parallel for each individual and species in parallel
+cycle_df <- foreach(i = unique(phen_merged$ID), .combine = 'rbind') %dopar%{
+  # subset the phenology records for an individual/species
+  # data should already be chronological 
+  subdf <- phen_merged[which(phen_merged$ID == i),] 
+  # calculate periods of flowering or fruiting (duration) and nonflowering or nonfruiting (intervals) 
+  cycle_component <- rle(subdf$presence) 
+  # characterize each flowering/fruiting cycle
+  sub_cycle <- cycle_quant(cycle_component, i)
+  return(sub_cycle)
+}
+```
+
+Assign cycle categorization based on the classification scheme in \
+Newstrom LE, Frankie GW, Baker HG (1994a) A new classification for plant phenology based on flowering patterns in lowland tropical rain forest trees at La Selva, Costa Rica. Biotropica 26:141–159. https://doi.org/10.2307/2388804\
+\
+Annual flowering and fruiting cycles occur once per year\
+Sub-annual cycles occur multiple times per year\
+Supra-annual cycles occur less than once a year\
+Continual cycles are patterns of constant flowering or fruiting with no or infrequent, brief interruptions
+```{r, echo = T, warning = F, message = F}
+# function to categorize cycles
+# if cycle length is less than 11 months assign as sub-annual
+cycle_df$cycle_category <- ifelse(cycle_df$cycle_length < 11, 'sub-annual', 
+                                  # if cycle length is between 11-13 months assign as annual
+                                  ifelse(between(cycle_df$cycle_length,11,13),'annual',
+                                         # if cycle interval is greater than 2 months, 
+                                         # then assign as supra-annual
+                                         ifelse(cycle_df$cycle_interval > 2, 'supra-annual', 
+                                                # otherwise categorize as continual 
+                                                ifelse(cycle_df$cycle_interval <=2, 'continual',NA))))
+
+# for individuals/species that exhibited only one cycle, assign as either supra-annual or continual
+# leave the cycle categories of individuals/species with more than one cycle alone
+cycle_df$cycle_category <- ifelse(cycle_df$episodes != 1, cycle_df$cycle_category,
+                                  # if the cycle duration was shorter than the interval duration
+                                  # then asasign as supra-annual, otherwise assign as continual
+                                   ifelse(cycle_df$total_duration < cycle_df$total_interval,
+                                          'supra-annual','continual')) 
+
+# get rid of leading and tailing sub-annual and annual cycles 
+# leading = first cycle for an individual/species
+# tailing = last cycle for an individual/species
+cycle_df$cycle_category <- ifelse(cycle_df$cycle_num == 1 & # if it is a leading cycle 
+                                    # and the cycle is categorized as a sub-annual and annual 
+                                    cycle_df$cycle_category %in% c('sub-annual','annual') & 
+                                    # and the cycle starts as an active flowering/fruiting period 
+                                    # then reassign to NA, otherwise keep as is
+                                    cycle_df$start == 'on', NA, cycle_df$cycle_category)
+
+cycle_df$cycle_category <- ifelse(cycle_df$cycle_num == cycle_df$episodes & # if it is a tailing cycle 
+                                    # and the cycle is categorized as a sub-annual and annual 
+                                    cycle_df$cycle_category %in% c('sub-annual','annual') & 
+                                    # and the cycle ends as an active flowering/fruiting period 
+                                    # then reassign to NA, otherwise keep as is
+                                    cycle_df$start == 'off',NA, cycle_df$cycle_category) 
+
+# add in identifying information for each cycle based on its ID
+cycle_df <- merge(cycle_df, distinct(phen_merged[,c('ID','species','Tag','stage','dataset')]), by = 'ID', all.x = T, all.y = F)
+
+# assign the scale of analysis (species or individual)
+# Tags = sssw or vvsw indicate species
+cycle_df$scale <- ifelse(cycle_df$Tag %in% c('sssw','vvsw'), 'species', 'individual')
+
+# view subsample of cycle data 
+head(cycle_df[which(is.na(cycle_df$cycle_category)),])
+
+# get number of cycles in each category for individuals
+cycle_df %>% filter(scale != 'species') %>% group_by(cycle_category,dataset) %>% count()
+
+# get number of cycles in each category for species 
+cycle_df %>% filter(scale == 'species') %>% group_by(cycle_category,dataset) %>% count()
+
+write.csv(cycle_df, 'phen_cycle_characteristics.csv')
+```
+
+Summarize the cycle characteristics to the individual/species
+```{r, echo = T, warning = F, message = F}
+# create vector of cycle names  
+cycle_names <- c('continual','sub-annual','annual','supra-annual')
+
+# get rid of cycles for individuals or species that could not be characterized due to too few cycles
+cycle_df <- cycle_df[which(!is.na(cycle_df$cycle_category)),] 
+
+# get summary statistics for each individual and species 
+cycle_summary <- cycle_df %>% group_by(ID, species, Tag, dataset, stage,scale, episodes, 
+                                       total_duration, total_interval) %>%
+                              summarise(n = n(), 
+                                        continual = length(which(cycle_category == 'continual')),
+                                        sub_annual = length(which(cycle_category == 'sub-annual')),
+                                        annual = length(which(cycle_category == 'annual')),
+                                        supra_annual = length(which(cycle_category == 'supra-annual')),
+                                        length_min = min(cycle_length, na.rm =T), 
+                                        length_max = max(cycle_length, na.rm =T), 
+                                        length_mean = mean(cycle_length, na.rm =T), 
+                                        length_sd = sd(cycle_length,na.rm =T), 
+                                        length_median = median(cycle_length,na.rm =T), 
+                                        length_mad = mad(cycle_length,na.rm =T),
+                                        duration_min = min(cycle_duration, na.rm =T), 
+                                        duration_max = max(cycle_duration, na.rm =T), 
+                                        duration_mean = mean(cycle_duration, na.rm =T), 
+                                        duration_sd = sd(cycle_duration,na.rm =T), 
+                                        duration_median = median(cycle_duration,na.rm =T), 
+                                        duration_mad = mad(cycle_duration,na.rm =T),
+                                        interval_min = min(cycle_interval, na.rm =T), 
+                                        interval_max = max(cycle_interval, na.rm =T), 
+                                        interval_mean = mean(cycle_interval, na.rm =T), 
+                                        interval_sd = sd(cycle_interval,na.rm =T), 
+                                        interval_median = median(cycle_interval,na.rm =T), 
+                                        interval_mad = mad(cycle_interval,na.rm =T)) %>% 
+                              # get dominant cycle frequency and proportion
+                              mutate(dom_freq = max(c(continual, sub_annual,annual, supra_annual), na.rm = T), 
+                                     dom_prop = max(c(continual, sub_annual,annual, supra_annual), na.rm = T)/n(), 
+                                     dom_cycles = paste0(cycle_names[which(c(continual, sub_annual,annual,                                                                                      supra_annual)==dom_freq)], collapse ='/'))
+
+# merge in plant names
+cycle_summary <- merge(plant_names, cycle_summary, by.x = 'Species',by.y = 'species', all.x = F, all.y = T)
+
+# flag plants without a dominant cycle 
+cycle_summary$cycle_category <- sapply(1:nrow(cycle_summary), 
+                                       function(x) grepl('/', cycle_summary$dom_cycle[x]))
+
+# reassign plants without a dominant cycle to "no dominance'
+cycle_summary$cycle_category <- ifelse(cycle_summary$cycle_category == 'FALSE', 
+                                       cycle_summary$dom_cycle, 'no dominance')
+
+# convert to factor and specify level order
+cycle_summary$cycle_category <- factor(cycle_summary$cycle_category, 
+                                       levels = c('continual','sub-annual','annual','supra-annual','no dominance'))
+
+
+# get column names
+colnames(cycle_summary)
+# reorder table columns
+cycle_summary <- cycle_summary[,c(4,1:3,5:8,12,38,37,35:36,13:16,9:11,17:34)]
+
+# get the number of dominant cycles in each category for individuals
+cycle_summary %>% filter(scale != 'individual') %>% group_by(stage, dataset, cycle_category) %>% count() 
+
+# get the number of dominant cycles in each category for species
+cycle_summary %>% filter(scale == 'species') %>% group_by(stage, dataset, cycle_category) %>% count() 
+```
+
+Get a sense of the individual and species sample size before dropping cycles with too few cycles
+```{r, echo = T, warning = F, message = F}
+# summarize the sample size of the number of cycles completed by species during the study period for flowers
+cycle_species_sample <- cycle_summary %>% filter(stage == 'flower' & scale == 'species') %>% 
+                                          group_by(n) %>% 
+                                          summarise(counts = n()) %>% 
+                                          arrange(desc(n))
+
+# get cumulative sample sizes
+cycle_species_sample$samples <- cumsum(cycle_species_sample$counts) 
+
+# plot cumulative sample size
+fls_plot <- ggplot(cycle_species_sample, aes(x = n, y = samples)) +
+                geom_point() + 
+                geom_line() + 
+                labs(x = 'number of flower cycles', y = 'number of species sampled')
+
+# summarize the sample size of the number of cycles completed by species during the study period for fruit
+cycle_species_sample <- cycle_summary %>% filter(stage == 'fruit' & scale == 'species') %>% 
+                                          group_by(n) %>% 
+                                          summarise(counts = n()) %>% 
+                                          arrange(desc(n))
+
+# get cumulative sample sizes
+cycle_species_sample$samples <- cumsum(cycle_species_sample$counts) 
+
+frs_plot <- ggplot(cycle_species_sample, aes(x = n, y = samples)) +
+                geom_point() + 
+                geom_line() + 
+                labs(x = 'number of fruit cycles', y = 'number of species sampled') 
+
+# summarize the sample size of the number of cycles completed by individuals during the study period for flowers
+cycle_individual_sample <- cycle_summary %>% filter(stage == 'flower' & scale == 'individual') %>% 
+                                             group_by(n) %>% 
+                                             summarise(counts = n()) %>% 
+                                             arrange(desc(n)) 
+
+# cumulative sample size
+cycle_individual_sample$samples <- cumsum(cycle_individual_sample$counts) 
+
+# plot cumulative sample size
+fli_plot <- ggplot(cycle_individual_sample, aes(x = n, y = samples)) +
+                geom_point() + 
+                geom_line() + 
+                labs(x = 'number of flower cycles', y = 'number of individuals sampled')
+
+# summarize the sample size of the number of cycles completed by individuals during the study period for fruit
+cycle_individual_sample <- cycle_summary %>% filter(stage == 'fruit' & scale =='individual') %>% 
+                                             group_by(n) %>% 
+                                             summarise(counts = n()) %>% 
+                                             arrange(desc(n))
+
+# cumulative sample size
+cycle_individual_sample$samples <- cumsum(cycle_individual_sample$counts) 
+
+# plot cumulative sample size
+fri_plot <- ggplot(cycle_individual_sample, aes(x = n, y = samples)) +
+                geom_point() + 
+                geom_line() + 
+                labs(x = 'number of fruit cycles', y = 'number of individuals sampled')
+
+
+grid.arrange(fli_plot, fri_plot, fls_plot, frs_plot, nrow =2, ncol = 2)
+
+# # restrict analyses to individuals and species that underwent at least 3 cycles 
+# cycle_summary <- cycle_summary[which(cycle_summary$n > 2),]
+# write.csv(cycle_summary, 'phen_cycle_character_summary.csv') # save table
+# 
+# # correspondingly subset the cycle characteristic table with the plants that have at least 3 cycles
+# cycle_df <- cycle_df[which(cycle_df$ID %in% cycle_summary$ID),]
+```
+**The flowering and fruiting phenologies were characterized for how many individuals and species?**\
+```{r, echo = T, warning = F, message = F}
+cycle_summary %>% group_by(scale, stage,dataset) %>% summarise(n = length(unique(ID)), taxa = length(unique(Species)))
+```
+
+Visualize random sample of results
+```{r, echo = T, warning = F, message = F}
+# draw five random plants
+ids <- sample(cycle_summary$ID, 5, replace = F)
+
+# subset out phenology data of the sample 5 plants
+subdf <- phen_merged[which(phen_merged$ID %in% ids),]
+# subset the cycle summary of these sample plants
+subdf <- merge(subdf, cycle_summary[,c('ID','dom_cycles')], by = 'ID', all.x =T, all.y = F)
+# chornologically order
+subdf <- arrange(subdf, ID, Date)
+
+# plot time series of absence/presene of these sample plants
+ggplot(subdf,aes(x=Date,y=presence))+
+                geom_line(aes(color = dataset), size = 1)+
+                ylab("presence")+
+                xlab("")+
+                theme(legend.position="bottom") + 
+                theme(panel.background = element_rect(fill = 'white',colour = 'black'),
+                panel.grid.major.x =  element_line(colour = "grey80"),
+                panel.grid.minor.x = element_line(colour = "grey80")) +
+                facet_wrap(~paste(ID,dom_cycles, sep = ":"),ncol=1, strip.position = 'top', scales = 'free_y')+
+                scale_color_brewer(palette = 'Accent')
+
+```
+
+Visualize distribution of dominant cycles at population level
+```{r, echo = T, warning = F, message = F}
+# summarize dominant cycles
+dompop_summary <- cycle_summary %>% group_by(dataset, stage, scale,cycle_category) %>% 
+                                    count(cycle_category,.drop = FALSE)
+
+# tally dominant cycles and get Goodman Estimation of confidence of multinomial proportions
+# create empty list to store a table for 
+# flowering individual, fruiting individual, flowering species, fruiting species for each forest
+mci_list <- list() 
+
+# generate dominant cycle tables for each forest 
+for (i in c('sssw','vvsw')){
+  flindi <- MultinomCI(dompop_summary$n[which(dompop_summary$dataset == i &
+                                              dompop_summary$stage == 'flower' &  
+                                              dompop_summary$scale == 'individual')],
+                       0.95, 'two.sided', 'goodman') # generate dominany cycle table for flowering individual
+  
+  frindi <- MultinomCI(dompop_summary$n[which(dompop_summary$dataset == i &
+                                              dompop_summary$stage == 'fruit' &  
+                                              dompop_summary$scale == 'individual')],
+                       0.95, 'two.sided', 'goodman') # generate dominany cycle table for fruiting individual
+  
+  flsp <- MultinomCI(dompop_summary$n[which(dompop_summary$dataset == i &
+                                              dompop_summary$stage == 'flower' &  
+                                              dompop_summary$scale == 'species')],
+                     0.95, 'two.sided', 'goodman') # generate dominany cycle table for flowering species
+  
+  frsp <- MultinomCI(dompop_summary$n[which(dompop_summary$dataset == i &
+                                              dompop_summary$stage == 'fruit' &  
+                                              dompop_summary$scale == 'species')],
+                     0.95, 'two.sided', 'goodman') # generate dominany cycle table for fruiting individual
+  
+  mci_list <- append(mci_list,list(flindi,flsp,frindi,frsp)) # append to list
+}
+
+# merge all dominant cycle tables into a single table 
+ml_list <- do.call(rbind, mci_list) # merge tables 
+
+# merge multinomial estimates to summary table
+dompop_summary <- cbind(as.data.frame(dompop_summary), as.data.frame(ml_list)) 
+
+# print summary table 
+print(dompop_summary)
+
+# save table
+write.csv(dompop_summary, 'dom_pop_summary_commphen.csv')
+
+# relabel the dataset column with the full forest name for visualization purposes
+dompop_summary$dataset <- ifelse(dompop_summary$dataset =='sssw', 'Sangasanga','Vatovavy')
+
+# generate barplot of dominant cycles with confidence intervals for individuals 
+indi_plot <- ggplot(dompop_summary %>% filter(scale == 'individual'), 
+                  aes(x = dataset, y = est, fill = cycle_category)) +
+                  geom_bar(stat = 'identity', position = 'dodge', color = 'black') +
+                  geom_errorbar(aes(ymin = lwr.ci, ymax = upr.ci), 
+                                position = position_dodge(width = 0.9), colour = 'black', width = 0.2) +
+                  theme_bw() +
+                  theme(axis.line = element_line(color='black'),
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8),
+                        plot.background = element_blank(),
+                        panel.grid.major = element_blank(),
+                        panel.grid.minor = element_blank(),
+                        strip.text.x = element_blank(),
+                        legend.position = 'bottom')+
+                scale_fill_brewer(palette='Greys') + 
+                labs(y = 'proportion', x = 'dominant cycle')+
+            facet_wrap(~stage, nrow = 1, ncol = 2) 
+
+# generate barplot of dominant cycles with confidence intervals for species
+sp_plot <- ggplot(dompop_summary %>% filter(scale == 'species'), 
+                  aes(x = dataset, y = est, fill = cycle_category)) +
+            geom_bar(stat = 'identity', position = 'dodge', color = 'black') +
+            geom_errorbar(aes(ymin = lwr.ci, ymax = upr.ci), 
+                          position = position_dodge(width = 0.9), colour = 'black', width = 0.2) +
+            theme_bw() +
+            theme(axis.line = element_line(color='black'),
+                  text = element_text(size = 8), 
+                  axis.text = element_text(size = 8),
+                  plot.background = element_blank(),
+                  panel.grid.major = element_blank(),
+                  panel.grid.minor = element_blank(),
+                  strip.text.x = element_blank(),
+                  legend.position = 'bottom')+
+            scale_fill_brewer(palette='Greys') + 
+                labs(y = 'proportion', x = 'dominant cycle')+
+            facet_wrap(~stage, nrow = 1, ncol = 2)
+
+# arrange figure 
+fig1 <- plot_grid(indi_plot, sp_plot,ncol = 1, nrow = 2)
+
+fig1
+
+# save figure
+ggsave(file = paste0(figpath, '/fig1.png'),
+       plot = fig1,
+       width = 5, 
+       height = 4, 
+       units = 'in')
+```
+Sangasanga: sub-annual flowering and fruiting cycles were most frequently observed across individuals and species\
+Vatovavy: supra-annual flowering and fruiting cycles were most frequently observed across individuals, sub-annual and no dominance in cycles was the most frequently observed flowering cycles across species and no dominance in cycles was the most frequently observed fruiting cycles across species.
+
+Chi square and Fisher exact test to examine whether plants in these communities different distributions of cycle types 
+```{r, echo = T, warning = F, message = F}
+# Run Chi Squared statistiscs to see if we observe unequal amount of dominant cycles 
+
+# run for Vatovavy, flowering individual 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
+                                    dompop_summary$stage == 'flower' &
+                                    dompop_summary$scale=='individual')])
+
+# run for Sangasanga, flowering individual 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
+                                    dompop_summary$stage == 'fruit' &
+                                    dompop_summary$scale=='individual')])
+
+# run for Vatovavy, fruiting individual 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
+                                    dompop_summary$stage == 'fruit' &
+                                    dompop_summary$scale=='individual')])
+
+# run for Sangasanga, fruiting individual 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
+                                    dompop_summary$stage == 'fruit' &
+                                    dompop_summary$scale=='individual')])
+
+
+# run for Vatovavy, flowering species
+fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
+                                    dompop_summary$stage == 'flower' &
+                                    dompop_summary$scale=='species')], rep(2,5)))
+
+# run for Sangasanga, fruiting species
+fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
+                                    dompop_summary$stage == 'fruit' &
+                                    dompop_summary$scale=='species')], rep(2,5)))
+
+# run for Sangasanga, flowering species
+fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
+                                    dompop_summary$stage == 'flower' &
+                                    dompop_summary$scale=='species')], rep(2,5)))
+
+# run for Sangasanga, fruiting species
+fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
+                                    dompop_summary$stage == 'fruit' &
+                                    dompop_summary$scale=='species')], rep(2,5)))
+```
+
+Run post-hoc binomial test to see if dominant cycles differed from other cycles 
+```{r, echo = T, warning = F, message = F}
+# function for identifying the dominant category and conducting binomial test
+dom_binom <- function(df, d, st, sc){
+  # df: dominant cycle table 
+  # d: specify which forest: 'Sangasanga' or 'Vatovavy'
+  # st: specify which stage: 'flower' or 'fruit'
+  # sc: specify which scale: 'individual' or 'species'
+  df <- df %>% filter(dataset == d & stage == st & scale == sc) # filter dataframe by forest, stage and scale
+  dom_cycle <- df$cycle_category[which(df$n == max(df$n))][1] # get the dominant cycle category
+  df$dn <- df$n[which(df$cycle_category == dom_cycle)] # get the number of times that cycle category occured
+  df$dom_cycle <- dom_cycle # add a column that specifies the dominant cycle category
+  # get rid of rows in which the cycle category is equal to the dominant category
+  df <- df[-which(df$cycle_category == dom_cycle),] 
+  df$dtot <- df$n + df$dn # sum up the number of times the plants exhibited nondomimant cycles collectively
+  df$sig <- sapply(1:nrow(df),
+                   function(x) binom.test(x=df$dn[x],
+                                          n=df$dtot[x],
+                                          p = 0.05, 
+                                          alternative='greater')$p.value) # run the binomial test
+  return(df)
+}
+
+# create empty table to save results
+binom_results <- data.frame(matrix(ncol = 4, nrow = 0))
+colnames(binom_results) <- c('dn','dom_cycle','dtot','sig') # assign column names
+
+# run binomial test for each combination of scale, stage and forest
+for (i in c('individual','species')) {
+  for (j in c('flower','fruit')) {
+    for (k in c('Sangasanga','Vatovavy')) {
+      df <- dom_binom(dompop_summary,k,j,i)
+      binom_results <- rbind(binom_results,df)
+    }
+  }
+}
+
+print(binom_results) # output  results 
+
+# save results
+write.csv(binom_results, 'dom_cycle_binomial_test.csv')
+```
+
+Visualize the distribution of median cycle length, duration and interval for individuals and species
+```{r, echo = T, warning = F, message = F}
+# summary the median cycle length, duration and interval per species
+community_sum <- cycle_summary %>% group_by(scale, stage, dataset) %>% 
+                                  summarise(n = n(), length_mean = mean(length_median,na.rm=T),
+                                            length_sd = sd(length_median,na.rm=T),
+                                            length_mad = mad(length_median,na.rm=T), 
+                                            length_median = median(length_median,na.rm=T), 
+                                            duration_mean = mean(duration_median,na.rm=T),
+                                            duration_sd = sd(duration_median,na.rm=T),
+                                            duration_mad = mad(duration_median,na.rm=T),
+                                            duration_median = median(duration_median,na.rm=T), 
+                                            interval_mean = mean(interval_median,na.rm=T),
+                                            interval_sd = sd(interval_median,na.rm=T),
+                                            interval_mad = mad(interval_median,na.rm=T),
+                                            interval_median = median(interval_median,na.rm=T))
+                                            
+community_sum
+
+# plot for Sangasanga cycle lengths
+length_plot <- ggplot(cycle_summary %>% filter(dataset == 'sssw'), 
+                      aes(x = length_median)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=length_median, linetype = 'dashed')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=length_median - length_mad, linetype = 'dotted')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=length_median + length_mad, linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'length (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
+
+# plot for Sangasanga cycle duration
+dur_plot <- ggplot(cycle_summary  %>% filter(dataset == 'sssw'), 
+                   aes(x = duration_median)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=duration_median, linetype = 'dashed')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=duration_median - duration_mad, linetype = 'dotted')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=duration_median + duration_mad, linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'duration (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
+  
+# plot for Sangasanga cycle interval
+int_plot <- ggplot(cycle_summary  %>% filter(dataset == 'sssw'), 
+                   aes(x = interval_median)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=interval_median, linetype = 'dashed')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=interval_median - interval_mad, linetype = 'dotted')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=interval_median + interval_mad, linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'interval (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
+
+# arrange figure 
+cycle_flower <- grid.arrange(length_plot, dur_plot, int_plot, ncol = 3, nrow = 1)
+
+# save plot
+ggsave(file = paste0(figpath, '/FigS1.png'),
+       plot = cycle_flower,
+       width = 6.5, 
+       height = 4, 
+       units = 'in')
+
+# output figure 
+cycle_flower
+```
+
+```{r, echo = T, warning = F, message = F}
+# plot for Vatovavy cycle lengths
+length_plot <- ggplot(cycle_summary %>% filter(dataset == 'vvsw'), 
+                      aes(x = length_median)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=length_median, 
+                                 linetype = 'dashed')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=length_median - length_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=length_median + length_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'length (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, 
+                             nrow = 4, 
+                             ncol = 1, 
+                             strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), 
+                             scales = 'free')
+
+# plot for Vatovavy cycle duration
+dur_plot <- ggplot(cycle_summary  %>% filter(dataset == 'vvsw'), 
+                   aes(x = duration_median)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=duration_median, 
+                                 linetype = 'dashed')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=duration_median - duration_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=duration_median + duration_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'duration (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
+  
+# plot for Vatovavy cycle interval
+int_plot <- ggplot(cycle_summary  %>% filter(dataset == 'vvsw'), aes(x = interval_median)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=interval_median, 
+                                 linetype = 'dashed')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=interval_median - interval_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sum %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=interval_median + interval_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'interval (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, 
+                             nrow = 4, 
+                             ncol = 1, strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), 
+                             scales = 'free')
+
+# arrange figure 
+cycle_flower <- grid.arrange(length_plot, dur_plot, int_plot, ncol = 3, nrow = 1)
+
+# save plot
+ggsave(file = paste0(figpath, '/FigS2.png'),
+       plot = cycle_flower,
+       width = 6.5, 
+       height = 4, 
+       units = 'in')
+
+# output figure 
+cycle_flower
+```
+
+Compare cycle characteristics between communities
+```{r, echo=T, warning=F, message=F}
+community_diff <- community_sum[c(2,4,6,8),5:ncol(community_sum)] - community_sum[c(1,3,5,7),5:ncol(community_sum)]
+community_diff$scale <- c('individual','individual','species','species')
+community_diff$stage <- c('flower','fruit','flower','fruit')
+
+# function to generate test statistic to compare difference in cycle characteristics between communities
+perm_cycle_char <- function(df,sc,st){
+  # df = dataframe
+  # sc = individual or species
+  # st = flower or fruit
+  subdf <- cycle_summary %>% filter(sc == scale & st == stage) # subset the scale and stage 
+  subdf$dataset <- sample(subdf$dataset, length(subdf$dataset),replace = F) # permute the community labels 
+  # recaluate the the cycle characteristics
+  submetrics <- subdf %>% group_by(dataset) %>% summarise(length_mean = mean(length_median,na.rm=T),
+                                            length_sd = sd(length_median,na.rm=T),
+                                            length_mad = mad(length_median,na.rm=T), 
+                                            length_median = median(length_median,na.rm=T), 
+                                            duration_mean = mean(duration_median,na.rm=T),
+                                            duration_sd = sd(duration_median,na.rm=T),
+                                            duration_mad = mad(duration_median,na.rm=T),
+                                            duration_median = median(duration_median,na.rm=T), 
+                                            interval_mean = mean(interval_median,na.rm=T),
+                                            interval_sd = sd(interval_median,na.rm=T),
+                                            interval_mad = mad(interval_median,na.rm=T),
+                                            interval_median = median(interval_median,na.rm=T))
+  # generate test statistic by taking the difference between the Vatovavy and Sangasanga cycle characteristics
+  commdiff <- submetrics[2,2:ncol(submetrics)] - submetrics[1,2:ncol(submetrics)] 
+  return(commdiff) # return the result
+}
+
+# function to get p-value
+perm_pvalue <- function(obs_df, perm_df,sc, st, metric){
+  subdf <- obs_df %>% filter(stage == st & scale == sc)
+  metname <- colnames(obs_df)[metric]
+  ref <- subdf[1,metric]
+  # find the p-value
+  perm_metric <- perm_df[,metname] # extract permuted test stat
+  pval <- sum(abs(perm_metric) >= abs(ref))/length # get proportion of values that are more extreme than the absolute value of the observed metric, since a two tailed test is performed
+  pval_df <- data.frame(scale = sc, stage = st,metric = metname, obs_value = ref, pvalue = pval) # output info
+  return(pval_df)
+}
+
+# calculate for flower individual
+fli_cycle_comp <- foreach(i = 1:9999, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  comm_diff <- perm_cycle_char(cycle_summary, 'individual','flower')
+  return(comm_diff)
+}
+
+# add stage and scale info
+fli_cycle_comp$scale <- 'individual'
+fli_cycle_comp$stage <- 'flower'
+
+# add observed value
+fli_cycle_comp <- rbind(fli_cycle_comp,community_diff[which(community_diff$stage =='flower' & community_diff$scale == 'individual'),])
+
+write.csv(fli_cycle_comp,'permutations_flower_individual_characteristics.csv') # save permutations
+
+fli_pvalues <- foreach(i = 1:12, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  pmetrics <- perm_pvalue(community_diff, fli_cycle_comp, 'individual','flower',i)
+  return(pmetrics)
+}
+
+# calculate for fruit individual
+fri_cycle_comp <- foreach(i = 1:9999, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  comm_diff <- perm_cycle_char(cycle_summary, 'individual','fruit')
+  return(comm_diff)
+}
+
+# add scale and stage info
+fri_cycle_comp$scale <- 'individual'
+fri_cycle_comp$stage <- 'fruit'
+
+# add observed value
+fri_cycle_comp <- rbind(fri_cycle_comp,community_diff[which(community_diff$stage =='fruit' & community_diff$scale == 'individual'),])
+
+# save output
+write.csv(fri_cycle_comp,'permutations_fruit_individual_characteristics.csv')
+
+fri_pvalues <- foreach(i = 1:12, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  pmetrics <- perm_pvalue(community_diff, fri_cycle_comp, 'individual','fruit',i)
+  return(pmetrics)
+}
+
+
+#calculate for flower species
+flsp_cycle_comp <- foreach(i = 1:9999, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  comm_diff <- perm_cycle_char(cycle_summary, 'species','flower')
+  return(comm_diff)
+}
+
+# add stage and scale info
+flsp_cycle_comp$scale <- 'species'
+flsp_cycle_comp$stage <- 'flower'
+
+# add observed value
+flsp_cycle_comp <- rbind(flsp_cycle_comp,community_diff[which(community_diff$stage =='flower' & community_diff$scale == 'species'),])
+
+write.csv(flsp_cycle_comp,'permutations_flower_species_characteristics.csv')
+
+flsp_pvalues <- foreach(i = 1:12, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  pmetrics <- perm_pvalue(community_diff, flsp_cycle_comp, 'species','flower',i)
+  return(pmetrics)
+}
+
+# calculate for fruit species
+frsp_cycle_comp <- foreach(i = 1:9999, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  comm_diff <- perm_cycle_char(cycle_summary, 'species','fruit')
+  return(comm_diff)
+}
+
+# add scale and stage info
+frsp_cycle_comp$scale <- 'species'
+frsp_cycle_comp$stage <- 'fruit'
+
+# add observed value
+frsp_cycle_comp <- rbind(frsp_cycle_comp,community_diff[which(community_diff$stage =='fruit' & community_diff$scale == 'species'),])
+
+write.csv(frsp_cycle_comp,'permutations_fruit_species_characteristics.csv')
+
+frsp_pvalues <- foreach(i = 1:12, .combine = 'rbind', .packages = 'dplyr') %dopar%{
+  pmetrics <- perm_pvalue(community_diff, frsp_cycle_comp, 'species','fruit',i)
+  return(pmetrics)
+}
+
+comm_char_pvalues <- do.call("rbind", list(fli_pvalues,fri_pvalues,flsp_pvalues,frsp_pvalues))
+write.csv(comm_char_pvalues, 'permutation_test_pvalue_cycle_characteristic_comparison.csv')
+```
+
+Compare median cycle length, duration and interval between communities
+```{r, echo = T, warning = F, message = F}
+# create empty table to save results
+forest_comp <- data.frame(matrix(ncol = 6, nrow = 0))
+colnames(forest_comp) <- c('metric','stage','scale','tstate','dof','pval') # assign column names
+
+# for each scale, stage and metric
+for (i in c('individual','species')){
+  for (j in c('flower','fruit')){
+    for (k in c('length_median','duration_median','interval_median')){
+      subdf <- cycle_summary %>% filter(scale == i & stage == j) # subset the stage and scale
+      tdf <- t.test(subdf[which(subdf$dataset =='sssw'),k],subdf[which(subdf$dataset =='vvsw'),k]) # run t-test
+      # add t-test output stats to data table 
+      forest_comp[nrow(forest_comp)+1,] <- c(k,j,i,tdf$statistic, tdf$parameter, tdf$p.value) 
+    }
+  }
+}
+
+# save the t-test results
+write.csv(forest_comp,'forest_comp_comm_phen.csv')
+```
+
+**Which individuals and species had the shortest and longest cycle length, duration and interval?**
+```{r, echo = T, warning = F, message = F}
+# longest individual flowering cycle
+(cycle_summary %>% filter(scale =='individual' & stage == 'flower') %>% 
+                   filter(length_max == max(length_max)))[,c('Species','Latin','length_max')]
+
+# longest individual flowering duration
+(cycle_summary %>% filter(scale =='individual' & stage == 'flower') %>% 
+                   filter(duration_max == max(duration_max)))[,c('Species','Latin','duration_max')]
+
+# longest individual flowering interval
+(cycle_summary %>% filter(scale =='individual' & stage == 'flower') %>% 
+                   filter(interval_max == max(interval_max)))[,c('Species','Latin', 'interval_max')]
+
+# longest species flowering cycle
+(cycle_summary %>% filter(scale =='species' & stage == 'flower') %>% 
+                   filter(length_max == max(length_max)))[,c('Species','Latin','length_max')]
+
+# longest species flowering duration
+(cycle_summary %>% filter(scale =='species' & stage == 'flower') %>% 
+                   filter(duration_max == max(duration_max)))[,c('Species','Latin','duration_max')]
+
+# longest species flowering interval
+(cycle_summary %>% filter(scale =='species' & stage == 'flower') %>% 
+                   filter(interval_max == max(interval_max)))[,c('Species','Latin', 'interval_max')]
+
+# longest individual fruiting cycle
+(cycle_summary %>% filter(scale =='individual' & stage == 'fruit') %>% 
+                   filter(length_max == max(length_max)))[,c('Species','Latin','length_max')]
+
+# longest individual fruiting duration
+(cycle_summary %>% filter(scale =='individual' & stage == 'fruit') %>% 
+                   filter(duration_max == max(duration_max)))[,c('Species','Latin','duration_max')]
+
+# longest individual fruiting interval
+(cycle_summary %>% filter(scale =='individual' & stage == 'fruit') %>% 
+                   filter(interval_max == max(interval_max)))[,c('Species','Latin', 'interval_max')]
+
+# longest species fruiting cycle
+(cycle_summary %>% filter(scale =='species' & stage == 'fruit') %>% 
+                   filter(length_max == max(length_max)))[,c('Species','Latin','length_max')]
+
+# longest species fruiting duration
+(cycle_summary %>% filter(scale =='species' & stage == 'fruit') %>% 
+                   filter(duration_max == max(duration_max)))[,c('Species','Latin','duration_max')]
+
+# longest species fruiting interval
+(cycle_summary %>% filter(scale =='species' & stage == 'fruit') %>% 
+                   filter(interval_max == max(interval_max)))[,c('Species','Latin', 'interval_max')]
+```
+
+Visualize and and get summary statistics for cycle regularity
+```{r, echo = T, warning = F, message = F}
+# regularity is measured as the variation in cycle length, duration and interval 
+# summary the standard deviation of the cycle length, duration and interval 
+community_sd <- cycle_summary %>% group_by(scale, stage, dataset) %>% 
+                                  summarise(length_min = min(length_sd,na.rm=T),
+                                            length_max = max(length_sd,na.rm=T),
+                                            length_mean = mean(length_sd,na.rm=T),
+                                            length_mad = mad(length_sd,na.rm=T), 
+                                            length_median = median(length_sd,na.rm=T),
+                                            length_sd = sd(length_sd,na.rm=T),
+                                            duration_min = min(duration_sd,na.rm=T),
+                                            duration_max = max(duration_sd,na.rm=T),
+                                            duration_mean = mean(duration_sd,na.rm=T),
+                                            duration_mad = mad(duration_sd,na.rm=T),
+                                            duration_median = median(duration_sd,na.rm=T), 
+                                            duration_sd = sd(duration_sd,na.rm=T),
+                                            interval_min = min(interval_sd,na.rm=T),
+                                            interval_max = max(interval_sd,na.rm=T),
+                                            interval_mean = mean(interval_sd,na.rm=T),
+                                            interval_mad = mad(interval_sd,na.rm=T),
+                                            interval_median = median(interval_sd,na.rm=T),
+                                            interval_sd = sd(interval_sd,na.rm=T))
+                                            
+# plot the standard deviation in the cycle length for Sangasanga
+length_plot <- ggplot(cycle_summary %>% filter(dataset == 'sssw'), 
+                      aes(x = length_sd)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=length_median, 
+                                 linetype = 'dashed')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=length_median - length_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=length_median + length_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'length (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
+
+# plot the standard deviation in the cycle duration for Sangasanga
+dur_plot <- ggplot(cycle_summary %>% filter(dataset == 'sssw'), 
+                   aes(x = duration_sd)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=duration_median, 
+                                 linetype = 'dashed')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=duration_median - duration_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=duration_median + duration_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'duration (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, 
+                             nrow = 4, 
+                             ncol = 1, 
+                             strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), 
+                             scales = 'free')
+  
+# plot the standard deviation in the cycle interval for Sangasanga
+int_plot <- ggplot(cycle_summary %>% filter(dataset == 'sssw'), 
+                   aes(x = interval_sd)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=interval_median, 
+                                 linetype = 'dashed')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=interval_median - interval_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'sssw'), 
+                             aes(xintercept=interval_median + interval_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'interval (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, 
+                             nrow = 4, 
+                             ncol = 1, 
+                             strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), 
+                             scales = 'free')
+
+# arrange figure 
+cycle_flower <- grid.arrange(length_plot, dur_plot, int_plot, ncol = 3, nrow = 1)
+
+# save plot
+ggsave(file = paste0(figpath, '/FigS3.png'),
+       plot = cycle_flower,
+       width = 6.5, 
+       height = 4, 
+       units = 'in')
+
+# output figure 
+cycle_flower
+```
+
+```{r, echo = T, warning = F, message = F}
+# plot the standard deviation in the cycle length for Vatovavy
+length_plot <- ggplot(cycle_summary %>% filter(dataset == 'vvsw'), 
+                      aes(x = length_sd)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=length_median, linetype = 'dashed')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=length_median - length_mad, linetype = 'dotted')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=length_median + length_mad, linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'length (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, 
+                             nrow = 4, 
+                             ncol = 1, 
+                             strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), 
+                             scales = 'free')
+
+# plot the standard deviation in the cycle duration for Vatovavy
+dur_plot <- ggplot(cycle_summary %>% filter(dataset == 'vvsw'), 
+                   aes(x = duration_sd)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=duration_median, 
+                                 linetype = 'dashed')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=duration_median - duration_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=duration_median + duration_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'duration (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, 
+                             nrow = 4, 
+                             ncol = 1, 
+                             strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), 
+                             scales = 'free')
+  
+# plot the standard deviation in the cycle interval for Vatovavy
+int_plot <- ggplot(cycle_summary %>% filter(dataset == 'vvsw'), 
+                   aes(x = interval_sd)) +
+                  geom_histogram(color = 'black', fill = 'darkgray') +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=interval_median, linetype = 'dashed')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=interval_median - interval_mad, 
+                                 linetype = 'dotted')) +
+                  geom_vline(data=community_sd %>% filter(dataset == 'vvsw'), 
+                             aes(xintercept=interval_median + interval_mad, 
+                                 linetype = 'dotted')) +
+                  theme_bw() +
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8)) +
+                  labs(x = 'interval (months)', y = 'frequency') +
+                  facet_wrap(~scale + stage, 
+                             nrow = 4, 
+                             ncol = 1, 
+                             strip.position = 'right', 
+                             labeller = label_wrap_gen(multi_line=FALSE), 
+                             scales = 'free')
+
+# arrange figure 
+cycle_flower <- grid.arrange(length_plot, dur_plot, int_plot, ncol = 3, nrow = 1)
+
+# save figure 
+ggsave(file = paste0(figpath, '/FigS4.png'),
+       plot = cycle_flower,
+       width = 6.5, 
+       height = 4, 
+       units = 'in')
+
+# output figure
+cycle_flower
+
+# output table 
+community_sd
+```
+
+Compare median cycle length, duration and interval between communities
+```{r, echo = T, warning = F, message = F}
+# create empty table to save results
+forest_comp <- data.frame(matrix(ncol = 6, nrow = 0))
+colnames(forest_comp) <- c('metric','stage','scale','tstate','dof','pval') # assign column names
+
+# for each scale, stage and metric
+for (i in c('individual','species')){
+  for (j in c('flower','fruit')){
+    for (k in c('length_median','duration_median','interval_median')){
+      subdf <- cycle_summary %>% filter(scale == i & stage == j) # subset the stage and scale
+      tdf <- t.test(subdf[which(subdf$dataset =='sssw'),k],subdf[which(subdf$dataset =='vvsw'),k]) # run t-test
+      # add t-test output stats to data table 
+      forest_comp[nrow(forest_comp)+1,] <- c(k,j,i,tdf$statistic, tdf$parameter, tdf$p.value) 
+    }
+  }
+}
+
+# save the t-test results
+write.csv(forest_comp,'forest_comp_comm_phen_median.csv')
+```
+
+Compare cycle length, duration and interval regularity between communities
+```{r, echo = T, warning = F, message = F}
+# create empty table to save results
+forest_comp <- data.frame(matrix(ncol = 6, nrow = 0))
+colnames(forest_comp) <- c('metric','stage','scale','tstate','dof','pval') # assign column names
+
+# for each scale, stage and metric
+for (i in c('individual','species')){
+  for (j in c('flower','fruit')){
+    for (k in c('length_sd','duration_sd','interval_sd')){
+      subdf <- cycle_summary %>% filter(scale == i & stage == j)  # subset the stage and scale
+      tdf <- t.test(subdf[which(subdf$dataset =='sssw'),k],subdf[which(subdf$dataset =='vvsw'),k]) # run t-test
+      forest_comp[nrow(forest_comp)+1,] <- c(k,j,i,tdf$statistic, tdf$parameter, tdf$p.value)
+    }
+  }
+}
+
+write.csv(forest_comp,'forest_comp_comm_phen_sd.csv')
+```
