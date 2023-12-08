@@ -817,12 +817,11 @@ Run post-hoc chisq and Fisher test to see if frequency of dominant cycles was hi
 # Compare whether the dominant cycle frequency is sig. higher than the second dominant cycle frequency
 # If dominant cycle frequency is sig. higher than the second dominant cycle frequency, then it will also be sig. higher than all other cycles
 # function for identifying the dominant category and conducting binomial test
-dom_binom <- function(df, forest, st, sc){
+dom_binom <- function(df, forest, st){
   # df: dominant cycle table 
   # forest: specify which forest: 'Sangasanga' or 'Vatovavy'
   # st: specify which stage: 'flower' or 'fruit'
-  # sc: specify which scale: 'individual' or 'species'
-  df <- df %>% filter(dataset == forest & stage == st & scale == sc) # filter dataframe by forest, stage and scale
+  df <- df %>% filter(dataset == forest & stage == st & scale == 'individual') # filter dataframe by forest and stage
   df <- arrange(df, desc(n))
   dom_cycle <- df$cycle_category[1] # get the dominant cycle category
   dominant_n <- df$n[1] # get the number of times that dominant cycle category occurred
@@ -837,20 +836,18 @@ dom_binom <- function(df, forest, st, sc){
 }
 
 # create empty table to save results
-binom_results <- data.frame(matrix(ncol = 8, nrow = 0))
+binom_results <- data.frame(matrix(ncol = 7, nrow = 0))
 
 # run binomial test for each combination of forest community, phenology stage and scale
 for (i in c('Sangasanga','Vatovavy')) { # for each forest community 
   for (j in c('flower','fruit')) { # for each phenology stage
-    for (k in c('individual','species')) { # for each scale 
-      binom_output <- dom_binom(dompop_summary,i,j,k) # run binomial test
-      binom_results <- rbind(binom_results, c(i,j,k,binom_output)) # append results to binomial results test table
-    }
+      binom_output <- dom_binom(dompop_summary,i,j) # run binomial test
+      binom_results <- rbind(binom_results, c(i,j,binom_output)) # append results to binomial results test table
   }
 }
 
 # assign column labels of binom results 
-colnames(binom_results) <- c('community','stage','scale','dom_cycle','total_cycles_n','dom_cycle_n','second_cycle_n','sig') # assign column names
+colnames(binom_results) <- c('community','stage','dom_cycle','total_cycles_n','dom_cycle_n','second_cycle_n','sig') # assign column names
 
 print(binom_results) # output  results 
 
