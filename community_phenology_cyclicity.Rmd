@@ -810,7 +810,6 @@ chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' &
 chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
                                     dompop_summary$stage == 'fruit' &
                                     dompop_summary$scale=='individual')])
-
 ```
 
 Run post-hoc chisq and Fisher test to see if frequency of dominant cycles was higher than the frequency of all other cycles
@@ -838,7 +837,7 @@ dom_binom <- function(df, forest, st, sc){
 }
 
 # create empty table to save results
-binom_results <- data.frame(matrix(ncol = 7, nrow = 0))
+binom_results <- data.frame(matrix(ncol = 8, nrow = 0))
 
 # run binomial test for each combination of forest community, phenology stage and scale
 for (i in c('Sangasanga','Vatovavy')) { # for each forest community 
@@ -851,7 +850,7 @@ for (i in c('Sangasanga','Vatovavy')) { # for each forest community
 }
 
 # assign column labels of binom results 
-colnames(binom_results) <- c('community','stage','scale','dom_cycle','total_cycles_n','dom_cycle_n', 'sig') # assign column names
+colnames(binom_results) <- c('community','stage','scale','dom_cycle','total_cycles_n','dom_cycle_n','second_cycle_n','sig') # assign column names
 
 print(binom_results) # output  results 
 
