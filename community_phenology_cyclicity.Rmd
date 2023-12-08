@@ -811,26 +811,6 @@ chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' &
                                     dompop_summary$stage == 'fruit' &
                                     dompop_summary$scale=='individual')])
 
-
-# run for Vatovavy, flowering species
-chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
-                                    dompop_summary$stage == 'flower' &
-                                    dompop_summary$scale=='species')])
-
-# run for Sangasanga, fruiting species
-chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
-                                    dompop_summary$stage == 'fruit' &
-                                    dompop_summary$scale=='species')])
-
-# run for Sangasanga, flowering species
-chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
-                                    dompop_summary$stage == 'flower' &
-                                    dompop_summary$scale=='species')])
-
-# run for Sangasanga, fruiting species
-chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
-                                    dompop_summary$stage == 'fruit' &
-                                    dompop_summary$scale=='species')])
 ```
 
 Run post-hoc chisq and Fisher test to see if frequency of dominant cycles was higher than the frequency of all other cycles
