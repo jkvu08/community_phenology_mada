@@ -853,51 +853,6 @@ print(binom_results) # output  results
 
 # save results
 write.csv(binom_results, 'dom_cycle_binomial_test.csv')
-
-```
-
-Run post-hoc binomial test to see if frequency of dominant cycles differed from frequency of other cycles combined
-```{r, echo = T, warning = F, message = F}
-# function for identifying the dominant category and conducting binomial test
-dom_binom <- function(df, forest, st, sc){
-  # df: dominant cycle table 
-  # forest: specify which forest: 'Sangasanga' or 'Vatovavy'
-  # st: specify which stage: 'flower' or 'fruit'
-  # sc: specify which scale: 'individual' or 'species'
-  df <- df %>% filter(dataset == forest & stage == st & scale == sc) # filter dataframe by forest, stage and scale
-  dom_cycle <- df$cycle_category[which(df$n == max(df$n))][1] # get the dominant cycle category
-  dominant_n <- df$n[which(df$cycle_category == dom_cycle)] # get the number of times that dominant cycle category occurred
-  dom_cycle <- as.character(dom_cycle)
-  total_n <- sum(df$n) # sum up the number plant cycles exhibited
-  # run the binomial test for one-tailed test
-  binom_out <- binom.test(x=dominant_n,
-                              n=total_n,
-                              p = 0.2,  # prob set as 0.2 since there were 5 potential classifications (4 cycle types + non-dominant)
-                              alternative='greater')
-  pval <- binom_out$p.value # extract significance value
-  return(c(dom_cycle, total_n, dominant_n, pval))
-}
-
-# create empty table to save results
-binom_results <- data.frame(matrix(ncol = 7, nrow = 0))
-
-# run binomial test for each combination of forest community, phenology stage and scale
-for (i in c('Sangasanga','Vatovavy')) { # for each forest community 
-  for (j in c('flower','fruit')) { # for each phenology stage
-    for (k in c('individual','species')) { # for each scale 
-      binom_output <- dom_binom(dompop_summary,i,j,k) # run binomial test
-      binom_results <- rbind(binom_results, c(i,j,k,binom_output)) # append results to binomial results test table
-    }
-  }
-}
-
-# assign column labels of binom results 
-colnames(binom_results) <- c('community','stage','scale','dom_cycle','total_cycles_n','dom_cycle_n', 'sig') # assign column names
-
-print(binom_results) # output  results 
-
-# save results
-write.csv(binom_results, 'dom_cycle_binomial_test.csv')
 ```
 
 Community-level median cycle length, duration and interval across individuals and species
@@ -935,21 +890,21 @@ length_plot <- ggplot(cycle_summary_ss, # subset Sangasanga community data
                              aes(xintercept=length_median - length_mad, linetype = 'dotted')) +
                   geom_vline(data=community_sum_ss,
                              aes(xintercept=length_median + length_mad, linetype = 'dotted')) +
-                  theme_bw() + # set plot theme
-                  theme(legend.position = 'none', # get rid of legend
-                        text = element_text(size = 8), # assign text sizes
-                        axis.text = element_text(size = 8)) +
+                  theme_bw() + 
+                  theme(legend.position = 'none', 
+                        text = element_text(size = 8), 
+                        axis.text = element_text(size = 8),
+                        strip.background = element_blank(),
+                        strip.text = element_blank()) +
                   labs(x = 'length (months)', y = 'frequency') +
-                  facet_wrap(~scale + stage,  # plot separately by scale and stage
-                             nrow = 4, 
-                             ncol = 1, 
-                             strip.position = 'right', 
-                             labeller = label_wrap_gen(multi_line=FALSE), 
-                             scales = 'free')
+                  facet_nested_wrap(~scale + stage,
+                                    nrow = 4, 
+                                    ncol = 1, 
+                                    strip.position = 'right', 
+                                    scales = 'free')
 
 # plot for Sangasanga cycle duration
-dur_plot <- ggplot(cycle_summary  %>% filter(dataset == 'sssw'), 
-                   aes(x = duration_median)) +
+dur_plot <- ggplot(cycle_summary  %>% filter(dataset == 'sssw'), aes(x = duration_median)) +
                   geom_histogram(color = 'black', fill = 'darkgray') +
                   geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
                              aes(xintercept=duration_median, linetype = 'dashed')) +
@@ -960,14 +915,18 @@ dur_plot <- ggplot(cycle_summary  %>% filter(dataset == 'sssw'),
                   theme_bw() +
                   theme(legend.position = 'none', 
                         text = element_text(size = 8), 
-                        axis.text = element_text(size = 8)) +
+                        axis.text = element_text(size = 8),
+                        strip.background = element_blank(),
+                        strip.text = element_blank()) +
                   labs(x = 'duration (months)', y = 'frequency') +
-                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
-                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
+                  facet_nested_wrap(~scale + stage,
+                                    nrow = 4, 
+                                    ncol = 1, 
+                                    strip.position = 'right', 
+                                    scales = 'free')
   
 # plot for Sangasanga cycle interval
-int_plot <- ggplot(cycle_summary  %>% filter(dataset == 'sssw'), 
-                   aes(x = interval_median)) +
+int_plot <- ggplot(cycle_summary %>% filter(dataset == 'sssw'), aes(x = interval_median)) +
                   geom_histogram(color = 'black', fill = 'darkgray') +
                   geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
                              aes(xintercept=interval_median, linetype = 'dashed')) +
@@ -976,15 +935,20 @@ int_plot <- ggplot(cycle_summary  %>% filter(dataset == 'sssw'),
                   geom_vline(data=community_sum %>% filter(dataset == 'sssw'), 
                              aes(xintercept=interval_median + interval_mad, linetype = 'dotted')) +
                   theme_bw() +
-                  theme(legend.position = 'none', 
-                        text = element_text(size = 8), 
-                        axis.text = element_text(size = 8)) +
+                  theme(legend.position = 'none', # get rid of legend
+                        text = element_text(size = 8), # assign text sizes
+                        axis.text = element_text(size = 8),
+                        strip.background = element_rect(fill = 'white')) +
                   labs(x = 'interval (months)', y = 'frequency') +
-                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
-                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
-
+                  facet_nested_wrap(~scale + stage,
+                                    nrow = 4, 
+                                    ncol = 1, 
+                                    strip.position = 'right', 
+                                    scales = 'free')
 # arrange figure 
-cycle_flower <- grid.arrange(length_plot, dur_plot, int_plot, ncol = 3, nrow = 1)
+cycle_flower <- grid.arrange(length_plot, dur_plot, int_plot, 
+                             ncol = 3, 
+                             nrow = 1)
 
 # save plot
 ggsave(file = paste0('/FigS1.png'),
@@ -994,7 +958,7 @@ ggsave(file = paste0('/FigS1.png'),
        units = 'in')
 
 # output figure 
-cycle_flower
+plot(cycle_flower)
 ```
 
 Visualize Vatovavy median fruiting and flowering patterns
@@ -1015,15 +979,15 @@ length_plot <- ggplot(cycle_summary %>% filter(dataset == 'vvsw'),
                   theme_bw() +
                   theme(legend.position = 'none', 
                         text = element_text(size = 8), 
-                        axis.text = element_text(size = 8)) +
+                        axis.text = element_text(size = 8),
+                        strip.background = element_blank(),
+                        strip.text = element_blank()) +
                   labs(x = 'length (months)', y = 'frequency') +
-                  facet_wrap(~scale + stage, 
-                             nrow = 4, 
-                             ncol = 1, 
-                             strip.position = 'right', 
-                             labeller = label_wrap_gen(multi_line=FALSE), 
-                             scales = 'free')
-
+                  facet_nested_wrap(~scale + stage,
+                                    nrow = 4, 
+                                    ncol = 1, 
+                                    strip.position = 'right', 
+                                    scales = 'free')
 # plot for Vatovavy cycle duration
 dur_plot <- ggplot(cycle_summary  %>% filter(dataset == 'vvsw'), 
                    aes(x = duration_median)) +
@@ -1040,10 +1004,15 @@ dur_plot <- ggplot(cycle_summary  %>% filter(dataset == 'vvsw'),
                   theme_bw() +
                   theme(legend.position = 'none', 
                         text = element_text(size = 8), 
-                        axis.text = element_text(size = 8)) +
+                        axis.text = element_text(size = 8),
+                        strip.background = element_blank(),
+                        strip.text = element_blank()) +
                   labs(x = 'duration (months)', y = 'frequency') +
-                  facet_wrap(~scale + stage, nrow = 4, ncol = 1, strip.position = 'right', 
-                             labeller = label_wrap_gen(multi_line=FALSE), scales = 'free')
+                  facet_nested_wrap(~scale + stage,
+                                    nrow = 4, 
+                                    ncol = 1, 
+                                    strip.position = 'right', 
+                                    scales = 'free')
   
 # plot for Vatovavy cycle interval
 int_plot <- ggplot(cycle_summary  %>% filter(dataset == 'vvsw'), aes(x = interval_median)) +
@@ -1060,13 +1029,14 @@ int_plot <- ggplot(cycle_summary  %>% filter(dataset == 'vvsw'), aes(x = interva
                   theme_bw() +
                   theme(legend.position = 'none', 
                         text = element_text(size = 8), 
-                        axis.text = element_text(size = 8)) +
+                        axis.text = element_text(size = 8),
+                        strip.background =  element_rect(fill = 'white')) +
                   labs(x = 'interval (months)', y = 'frequency') +
-                  facet_wrap(~scale + stage, 
-                             nrow = 4, 
-                             ncol = 1, strip.position = 'right', 
-                             labeller = label_wrap_gen(multi_line=FALSE), 
-                             scales = 'free')
+                  facet_nested_wrap(~scale + stage,
+                                    nrow = 4, 
+                                    ncol = 1, 
+                                    strip.position = 'right', 
+                                    scales = 'free')
 
 # arrange figure 
 cycle_flower <- grid.arrange(length_plot, dur_plot, int_plot, ncol = 3, nrow = 1)
@@ -1078,8 +1048,6 @@ ggsave(file = paste0(figpath, '/FigS2.png'),
        height = 4, 
        units = 'in')
 
-# output figure 
-cycle_flower
 ```
 
 **Which individuals and species had the shortest and longest cycle length, duration and interval?**
