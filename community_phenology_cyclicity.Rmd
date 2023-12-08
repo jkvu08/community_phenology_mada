@@ -13,20 +13,19 @@ Manuscript title: Temperature and rainfall seasonality drives tropical community
 
 #### Set up working environment
 First set up working environment and load in relevant files
-```{r, setup, echo=T, message=FALSE, warning=FALSE}
+```{r, setup, echo=T, message=F, warning=F}
 # set working directory for all chunks
-setwd("C:/Users/Jannet/Documents/Dissertation/codes/community_phen_mada")
-knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/codes/community_phen_mada") 
+setwd("C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada")
+knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada") 
 
 # set up working directory 
 #setwd("C:/data")
 
 # set up directory to save figures
 #figpath <- "C:/figures"
-
 ```
 
-```{r, echo=T, message=FALSE, warning=FALSE}
+```{r, echo=T, message=F, warning=F}
 #load in packages
 library(dplyr)
 library(lubridate)
@@ -476,7 +475,11 @@ cycle_summary <- cycle_df %>% group_by(ID,
                                      dom_cycles = paste0(cycle_names[which(c(continual, sub_annual,annual,                                                                                      supra_annual)==dom_freq)], collapse ='/'))
 
 # merge in plant names
-cycle_summary <- merge(plant_names, cycle_summary, by.x = 'Species',by.y = 'species', all.x = F, all.y = T)
+cycle_summary <- merge(plant_names, cycle_summary, 
+                       by.x = 'Species',
+                       by.y = 'species', 
+                       all.x = F, 
+                       all.y = T)
 
 # flag plants without a dominant cycle 
 cycle_summary$cycle_category <- sapply(1:nrow(cycle_summary), 
@@ -499,10 +502,14 @@ cycle_summary <- cycle_summary[,c(4,1:3,5:8,12,38,37,35:36,13:16,9:11,17:34)]
 head(cycle_summary)
 
 # get the number of dominant cycles in each category for individuals
-cycle_summary %>% filter(scale == 'individual') %>% group_by(stage, dataset, cycle_category) %>% count() 
+cycle_summary %>% filter(scale == 'individual') %>% 
+                  group_by(stage, dataset, cycle_category) %>% 
+                  count() 
 
 # get the number of dominant cycles in each category for species
-cycle_summary %>% filter(scale == 'species') %>% group_by(stage, dataset, cycle_category) %>% count() 
+cycle_summary %>% filter(scale == 'species') %>% 
+                  group_by(stage, dataset, cycle_category) %>% 
+                  count() 
 ```
 
 Get a sense of the individual and species sample size before dropping cycles with too few cycles
@@ -580,7 +587,9 @@ grid.arrange(fli_plot, fri_plot, fls_plot, frs_plot, nrow =2, ncol = 2)
 
 **The flowering and fruiting phenologies were characterized for how many individuals and species?**\
 ```{r, echo = T, warning = F, message = F}
-cycle_summary %>% group_by(scale, stage,dataset) %>% summarise(n = length(unique(ID)), taxa = length(unique(Species)))
+cycle_summary %>% group_by(scale, stage,dataset) %>% 
+                  summarise(n = length(unique(ID)), 
+                            taxa = length(unique(Species)))
 ```
 
 Visualize random sample of results
@@ -591,7 +600,11 @@ ids <- sample(cycle_summary$ID, 5, replace = F)
 # subset out phenology data of the sample 5 plants
 subdf <- phen_merged[which(phen_merged$ID %in% ids),]
 # subset the cycle summary of these sample plants
-subdf <- merge(subdf, cycle_summary[,c('ID','dom_cycles')], by = 'ID', all.x =T, all.y = F)
+subdf <- merge(subdf, cycle_summary[,c('ID','dom_cycles')], 
+               by = 'ID', 
+               all.x =T, 
+               all.y = F)
+
 # chronologically order
 subdf <- arrange(subdf, ID, Date)
 
@@ -665,14 +678,15 @@ dompop_summary$dataset <- ifelse(dompop_summary$dataset =='sssw', 'Sangasanga','
 
 # generate bar plot of dominant cycles with confidence intervals for individuals 
 indi_plot <- ggplot(dompop_summary %>% filter(scale == 'individual'),  # subset out individual data
-                  aes(x = dataset, y = est, fill = cycle_category)) + # group bar plots by community 
-                                                                      # plot the dominant cycle proportions
-                                                                      # color by the cycle class
-                  geom_bar(stat = 'identity', position = 'dodge', color = 'black') + # side by side bar plots
+                  aes(x = dataset, y = est, fill = cycle_category)) + 
+                  geom_bar(stat = 'identity', 
+                           position = 'dodge', 
+                           color = 'black') + # side by side bar plots
                   geom_errorbar(aes(ymin = lwr.ci, ymax = upr.ci), # with confidence intervals
-                                position = position_dodge(width = 0.9), colour = 'black', width = 0.2) +
+                                position = position_dodge(width = 0.9), 
+                                colour = 'black', 
+                                width = 0.2) +
                   theme_bw() + # set plot theme
-                  # further modify theme aesthetics 
                   theme(axis.line = element_line(color='black'),
                         text = element_text(size = 8), 
                         axis.text = element_text(size = 8),
@@ -689,12 +703,14 @@ indi_plot <- ggplot(dompop_summary %>% filter(scale == 'individual'),  # subset 
 
 # generate barplot of dominant cycles with confidence intervals for species
 sp_plot <- ggplot(dompop_summary %>% filter(scale == 'species'), # subset out species data 
-                  aes(x = dataset, y = est, fill = cycle_category)) + # group barplots by community 
-                                                                      # plot the dominant cycle proportions
-                                                                      # color by the cycle class
-            geom_bar(stat = 'identity', position = 'dodge', color = 'black') + # side by side barplots
+                  aes(x = dataset, y = est, fill = cycle_category)) + 
+            geom_bar(stat = 'identity', 
+                     position = 'dodge', 
+                     color = 'black') + # side by side barplots
             geom_errorbar(aes(ymin = lwr.ci, ymax = upr.ci), # with confidence intervals
-                          position = position_dodge(width = 0.9), colour = 'black', width = 0.2) +
+                          position = position_dodge(width = 0.9), 
+                          colour = 'black', 
+                          width = 0.2) +
             theme_bw() + # set plot theme
             theme(axis.line = element_line(color='black'), # further modify theme aesthetics 
                   text = element_text(size = 8), 
@@ -738,11 +754,11 @@ dompop_n$cycle_category <- 'annual' # annual was selected arbitrarily, any other
    
 # generate barplot of dominant cycles with confidence intervals for individuals 
 dom_plot <- ggplot(dompop_summary,  # subset out individual data
-                  aes(x = dataset, y = est, fill = cycle_category)) + # group barplots by community 
-                                                                      # plot the dominant cycle proportions
-                                                                      # color by the dominant cycle class
+                  aes(x = dataset, y = est, fill = cycle_category)) +
                   geom_col(color = 'black',position = 'fill', size = 0.2) + # create stacked bar plot 
-                  geom_text(data = dompop_n, aes(x = dataset, y = 1.05, label = total_n), size = 2) +
+                  geom_text(data = dompop_n, 
+                            aes(x = dataset, y = 1.05, label = total_n), 
+                            size = 2) +
                   theme_bw() + # set plot theme
                   # further modify theme aesthetics 
                   theme(axis.line = element_line(color='black', size = 0.1),
