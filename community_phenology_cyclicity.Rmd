@@ -789,7 +789,7 @@ Vatovavy: supra-annual flowering and fruiting cycles were most frequently observ
 
 Chi square and Fisher exact test to examine whether plants in these communities different distributions of cycle types 
 ```{r, echo = T, warning = F, message = F}
-# Run Chi Squared statistiscs to see if we observe unequal amount of dominant cycles 
+# Run Chi Squared statistics to see if the frequency of cycle classes differs from random expectation (p = 0.2)
 
 # run for Vatovavy, flowering individual 
 chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
@@ -811,26 +811,73 @@ chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' &
                                     dompop_summary$stage == 'fruit' &
                                     dompop_summary$scale=='individual')])
 
-# Used Fisher instead of Chi Sq for species due to low sample size
+
 # run for Vatovavy, flowering species
-fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
                                     dompop_summary$stage == 'flower' &
-                                    dompop_summary$scale=='species')], rep(2,5)))
+                                    dompop_summary$scale=='species')])
 
 # run for Sangasanga, fruiting species
-fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Vatovavy' & 
                                     dompop_summary$stage == 'fruit' &
-                                    dompop_summary$scale=='species')], rep(2,5)))
+                                    dompop_summary$scale=='species')])
 
 # run for Sangasanga, flowering species
-fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
                                     dompop_summary$stage == 'flower' &
-                                    dompop_summary$scale=='species')], rep(2,5)))
+                                    dompop_summary$scale=='species')])
 
 # run for Sangasanga, fruiting species
-fisher.test(cbind(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
+chisq.test(dompop_summary$n[which(dompop_summary$dataset == 'Sangasanga' & 
                                     dompop_summary$stage == 'fruit' &
-                                    dompop_summary$scale=='species')], rep(2,5)))
+                                    dompop_summary$scale=='species')])
+```
+
+Run post-hoc chisq and Fisher test to see if frequency of dominant cycles was higher than the frequency of all other cycles
+```{r, echo = T, warning = F, message = F}
+# Compare whether the dominant cycle frequency is sig. higher than the second dominant cycle frequency
+# If dominant cycle frequency is sig. higher than the second dominant cycle frequency, then it will also be sig. higher than all other cycles
+# function for identifying the dominant category and conducting binomial test
+dom_binom <- function(df, forest, st, sc){
+  # df: dominant cycle table 
+  # forest: specify which forest: 'Sangasanga' or 'Vatovavy'
+  # st: specify which stage: 'flower' or 'fruit'
+  # sc: specify which scale: 'individual' or 'species'
+  df <- df %>% filter(dataset == forest & stage == st & scale == sc) # filter dataframe by forest, stage and scale
+  df <- arrange(df, desc(n))
+  dom_cycle <- df$cycle_category[1] # get the dominant cycle category
+  dominant_n <- df$n[1] # get the number of times that dominant cycle category occurred
+  second_n <- df$n[2] # get the number of times that dominant cycle category occurred
+  total_n <- sum(df$n) # sum up the number plant cycles exhibited
+  dom_cycle <- as.character(dom_cycle)
+  # run the binomial test for one-tailed test
+  binom_out <- binom.test(x=c(dominant_n,second_n),
+                          alternative='greater')
+  pval <- binom_out$p.value # extract significance value
+  return(c(dom_cycle, total_n, dominant_n, second_n, pval))
+}
+
+# create empty table to save results
+binom_results <- data.frame(matrix(ncol = 7, nrow = 0))
+
+# run binomial test for each combination of forest community, phenology stage and scale
+for (i in c('Sangasanga','Vatovavy')) { # for each forest community 
+  for (j in c('flower','fruit')) { # for each phenology stage
+    for (k in c('individual','species')) { # for each scale 
+      binom_output <- dom_binom(dompop_summary,i,j,k) # run binomial test
+      binom_results <- rbind(binom_results, c(i,j,k,binom_output)) # append results to binomial results test table
+    }
+  }
+}
+
+# assign column labels of binom results 
+colnames(binom_results) <- c('community','stage','scale','dom_cycle','total_cycles_n','dom_cycle_n', 'sig') # assign column names
+
+print(binom_results) # output  results 
+
+# save results
+write.csv(binom_results, 'dom_cycle_binomial_test.csv')
+
 ```
 
 Run post-hoc binomial test to see if frequency of dominant cycles differed from frequency of other cycles combined
