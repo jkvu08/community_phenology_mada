@@ -1,0 +1,281 @@
+---
+title: "community_phenology"
+author: "Jannet Vu"
+date: "10/26/2022"
+output: html_document
+---
+Manuscript title: Temperature and rainfall seasonality drives tropical community phenology in southeastern Madagascar
+
+**Goal is to characterize the interspecific and intraspecific synchrony of reproductive phenological cycle (flower and fruit) of plants in Kianjavato **\
+
+#### Set up working environment
+First set up working environment and load in relevant files
+```{r, setup, echo=F, message=F, warning=F}
+#set up working directory
+#setwd("C:/community_phenology_mada")
+setwd("C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada")
+knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada") 
+```
+
+```{r, echo=T, message=F, warning=F}
+#load in packages
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(reshape)
+library(doParallel)
+library(gridExtra)
+library(cowplot)
+
+# detect cores for parallel computing
+numcores <- detectCores() -1
+registerDoParallel(numcores) # register cores
+
+# load appropriate files
+# load in species level phenology data 
+# data for characterizing intraspecific synchrony
+kphen_fr_sync <- read.csv('kian_phen_popindividual_fruit_sync.csv', header =T, stringsAsFactors = F)[,-1]
+kphen_fr_sync$Date <- as.Date(kphen_fr_sync$Date, tz = 'Africa/Nairobi')
+
+kphen_fl_sync <- read.csv('kian_phen_popindividual_flower_sync.csv', header = T, stringsAsFactors = F)[,-1]
+kphen_fl_sync$Date <- as.Date(kphen_fl_sync$Date, tz = 'Africa/Nairobi')
+```
+columns:\
+species - vernacular name\
+year - year\
+month - month\
+dataset - forest identifier (sssw - sangasanga, vvvw - vatovavy)\
+Tag - individual identifier\
+Plot- survey plot\
+FuFr - fruit phenology (0-4)\
+Fl - flower phenology (0-4)\
+fruit - absence/presence of fruit\
+flower - absence/presence of flower \
+Date - date
+monthname - categorical month name
+Latin - scientific name(s)\
+multispecies - indicates the taxonomic ambiguity, FALSE = single species, TRUE = multiple species, AMB - single species, but uncertain which species
+stage - flower or fruit stage identifier
+
+```{r, echo = T, warning = F, message = F}
+head(kphen_fr_sync) # output to get sense of data
+```
+
+```{r, echo = T, warning = F, message = F}
+# data for characterizing species phenology and interspecific synchrony
+kphen_sp_fr <- read.csv('kian_phen_popspecies_fruit_sync.csv', header= T, stringsAsFactors = F)[,-1] 
+kphen_sp_fr$Date <- as.Date(kphen_sp_fr$Date, tz = 'Africa/Nairobi')
+
+kphen_sp_fl <- read.csv('kian_phen_popspecies_flower_sync.csv', header= T, stringsAsFactors = F)[,-1]
+kphen_sp_fl$Date <- as.Date(kphen_sp_fl$Date, tz = 'Africa/Nairobi')
+
+head(kphen_sp_fr) # visualize to get sense of data
+```
+
+columns:\
+year - year\
+month - month\
+monthname - categorical month name\
+Date - date \
+species - vernacular name \
+dataset - forest identifier (sssw - sangasanga, vvvw - vatovavy)\
+Latin - scientific name\
+multispecies - indicates the taxonomic ambiguity, FALSE = single species, TRUE = multiple species, AMB - single species, but 
+n - number of individuals sampled
+Fl or FuFr - flower or fruit phenology (0-4)\
+flower or fruit - absence/presence of flower or fruit\
+flower_prop or fruit_prop - proportion of individuals flowering or fruiting
+
+```{r, echo = T, warning = F, message = F}
+# load in species level phenology data 
+kphen_sp_fr <- read.csv('kian_phen_popspecies_fruit_sync.csv', header= T, stringsAsFactors = F)[,-1] 
+kphen_sp_fr$Date <- as.Date(kphen_sp_fr$Date, tz = 'Africa/Nairobi')
+
+kphen_sp_fl <- read.csv('kian_phen_popspecies_flower_sync.csv', header= T, stringsAsFactors = F)[,-1]
+kphen_sp_fl$Date <- as.Date(kphen_sp_fl$Date, tz = 'Africa/Nairobi')
+
+head(kphen_sp_fr) # output to get sense of data
+```
+columns:\
+year - year\
+month - month\
+monthname - categorical month name\
+Date - date \
+species - vernacular name \
+dataset - forest identifier (sssw - sangasanga, vvvw - vatovavy)\
+Latin - scientific name\
+multispecies - indicates the taxonomic ambiguity, FALSE = single species, TRUE = multiple species, AMB - single species, but uncertain which species
+n - number of individuals sampled
+Fl or FuFr - mean flower or fruit phenology (0-4)\
+flower or fruit - absence/presence of flower or fruit\
+flower_prop or fruit_prop - proportion of individuals flowering or fruiting
+
+#### Examine intraspecific and interspecific flowering and fruiting synchrony 
+Calculate community synchrony using Loreau's synchrony function\
+Loreau et al. 2008. Species Synchrony and Its Drivers: Neutral and Nonneutral Community Dynamics in Fluctuating Environments. The American Nauralist.\
+\
+Functions for community synchrony calculations
+```{r, echo = T, message = F, warning=F}
+# community.sync function from the "synchorny" package
+community.sync.aux <- function (data) {
+  # data = dataframe phenology time series, rows are time points, columns are unique individuals or species 
+  species.sd=apply(data, MARGIN=2, FUN=sd) # within species or individual trait SD 
+  community.var=var(rowSums(data)) # variance in trait across community or population
+  return(community.var/sum(species.sd, na.rm=TRUE)^2) # return Loreau's synchrony metric 
+}
+
+# permutation analysis lag function
+# perumation analysis will be used to examine whether degree of synchrony deviates from random expectation
+perm_lagfun <- function(df){
+  # df - dataframe phenology time series, rows are time points, columns are unique individuals or species 
+  shift_id <- rep(1:nrow(df), 2) # get time points and append with itself. This will be used to shift the time series
+  # we appended with itself so that shifts that occur later can loop back to the beginning 
+  perm_factor <- sample(nrow(df), ncol(df), replace = T) # sample time window shift for each column (individual or species)
+  perm_df <- sapply(1:ncol(df), function(x) { #  for each column (individual or species)
+          perm_end <- perm_factor[x]+nrow(df)-1 # pull the indices according to the randomly sampled time shift
+          val_shifts <- shift_id[perm_factor[x]:perm_end] # pull the values based on the time shifted indices 
+          return(df[val_shifts, x])
+        })
+  sync_val <- community.sync.aux(perm_df) # calculate the synchrony function on permuated data
+  return(sync_val)
+}
+
+# pvalue calculation
+perm_pvalue <- function(ref, perms,sp, dataset, st){
+  # ref = comm synchrony for observed 
+  # perms = comm synchrony based on permutation shifts
+  # sp = species
+  # dataset = community
+  # st = stage (flower or fruit)
+  perms <- c(perms,ref) # append reference synchrony to synchrony calcalated from permutations
+  perms_shift <- perms - mean(perms) # subtract from mean to get test statistic
+  ref_shift <- ref - mean(perms) # subtract from mean to get test statistic
+  pval <- sum(abs(perms_shift) >= abs(ref_shift))/length(perms_shift) # get proportion of values that are more extreme than the absolute value of the observed metric, since a two tailed test is performed
+  # format output info into dataframe
+  pval_df <- data.frame(species = sp, 
+                        community = dataset, 
+                        stage = st, 
+                        comm_sync = ref, 
+                        random_sync_mean = mean(perms), 
+                        random_sync_sd = sd(perms), 
+                        sync_diff = ref_shift, 
+                        sync_magnitude = ref/mean(perms), 
+                        pvalue = pval) # output info
+  return(pval_df)
+}
+
+# wrapper function for synchrony calculation and permutation analysis
+comm_sync_wrapper <- function(df, sp, dataset, st, nperms = 9999){
+  # df - dataframe phenology time series, rows are time points, columns are unique individuals or species 
+  # sp = species
+  # dataset = community
+  # st = stage (flower or fruit)
+  # nperms = number of permutation iterations to run
+  ref <- community.sync.aux(df) # calculate the reference community synchrony
+  perms <- c() # create empty vector for synchrony values from permuted data
+  for(i in 1:nperms){
+    perms[i] <- perm_lagfun(df) # get permuted synchrony values 
+  }
+  output <- perm_pvalue(ref, perms, sp, dataset, st) # calculate p-value
+  return(output)
+}
+```
+
+Calculate intraspecific synchrony
+```{r, echo = T, message = F, warning=F}
+# create empty dataframe to populate with synchrony info
+sync_df <- data.frame(matrix(ncol = 9, nrow = 0)) # create empty dataframe
+colnames(sync_df) <- c('species','community','stage',
+                       'comm_sync','random_sync_mean',
+                       'random_sync_sd', 'sync_diff',
+                       'sync_magnitude','pval') # generate column names
+
+# make sure in chronological order
+kphen_fr_sync <- arrange(kphen_fr_sync, Tag, Date)
+kphen_fl_sync <- arrange(kphen_fl_sync, Tag, Date)
+
+# Transform each species into a separate list 
+data_list <- lapply(split(kphen_fr_sync, ~Tag),function(x) as.list(x)) # transform dataframe into list
+#make dataframe of timeseries
+data_ls <-plyr::llply(data_list,.fun=function(x) ts(x$FuFr,start=c(x$year[1],x$month[1]),freq=12, class = 'ts')) # Output phenology in list form
+id_df <- distinct(kphen_fr_sync[,c('Tag','species','dataset')]) # get tag-species association for subsetting
+
+# for each species and each dataset stage
+for (sp in unique(kphen_fr_sync$species)){ # for each species
+  indices_ss <- which(id_df$species == sp & id_df$dataset =='sssw') # get indices of the tags that pertain to the species for Sangasanga
+  indices_vv <- which(id_df$species == sp & id_df$dataset =='vvsw') # get indices of the tags that pertain to the species for Vatovavy
+  if(length(indices_ss) > 2){ # if there are at least 3 individuals 
+    sp_wide <- Reduce(ts.intersect, data_ls[indices_ss]) # get the time series of that species in a wide-format table (rows: times, columns: individuals )
+    sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, sp, 'sssw','fruit') # add to synchrony table
+  }
+  if(length(indices_vv) > 2){ # if there are at least 3 individuals 
+    sp_wide <- Reduce(ts.intersect, data_ls[indices_vv]) # get the timeseries of that species in a wide-format table (rows: times, columns: individuals )
+    sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, sp, 'vvsw','fruit') # add to synchrony table
+  }
+}
+```
+
+Repeat for intraspecific flowering synchrony 
+```{r, echo = T, message = F, warning=F}
+data_list <- lapply(split(kphen_fl_sync, ~Tag),function(x) as.list(x)) # transform dataframe into list
+#make dataframe of timeseries "data_df"
+data_ls <-plyr::llply(data_list,.fun=function(x) ts(x$Fl,start=c(x$year[1],x$month[1]),freq=12, class = 'ts')) # Output phenology in list form
+id_df <- distinct(kphen_fl_sync[,c('Tag','species','dataset')])
+
+for (sp in unique(kphen_fl_sync$species)){ # for each species
+  indices_ss <- which(id_df$species == sp & id_df$dataset =='sssw') # get indices of the tags that pertain to the species for Sangasanga
+  indices_vv <- which(id_df$species == sp & id_df$dataset =='vvsw') # get indices of the tags that pertain to the species for Vatovavy
+  if(length(indices_ss) > 2){ # if there are at least 3 individuals 
+    sp_wide <- Reduce(ts.intersect, data_ls[indices_ss]) # get the timeseries of that species in a wide-format table (rows: times, columns: individuals )
+    sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, sp, 'sssw','flower') # add to synchrony table
+  }
+  if(length(indices_vv) > 2){ # if there are at least 3 individuals 
+    sp_wide <- Reduce(ts.intersect, data_ls[indices_vv]) # get the timeseries of that species in a wide-format table (rows: times, columns: individuals )
+    sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, sp, 'vvsw','flower') # add to synchrony table
+  }
+}
+
+# organize data by stage and community
+sync_df <- arrange(sync_df, stage, community)
+write.csv(sync_df, 'phen_species_sync_output.csv')
+```
+
+Calculate for interspecific synchrony
+```{r, echo = T, message = F, warning=F}
+# make sure in chronological order
+kphen_sp_fl <- arrange(kphen_sp_fl, species, Date)
+kphen_sp_fr <- arrange(kphen_sp_fr, species, Date)
+
+# Analyze interspecific flowering synchrony for Vatovavy using productivity
+data_list <- lapply(split(kphen_sp_fl %>% filter(dataset =='vvsw'), ~species),
+                    function(x) as.list(x)) # transform dataframe into list
+data_ls <-plyr::llply(data_list,.fun=function(x) ts(x$Fl,start=c(x$year[1],x$month[1]),freq=12, class = 'ts')) # Output phenology in list form
+sp_wide <- Reduce(ts.intersect, data_ls) # convert to wide format
+sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, 'community', 'vvsw','flower') # add to synchrony table
+
+# Analyze interspecific flowering synchrony for Sangasanga using productivity
+data_list <- lapply(split(kphen_sp_fl %>% filter(dataset =='sssw'), ~species),
+                    function(x) as.list(x)) # transform dataframe into list
+data_ls <-plyr::llply(data_list,.fun=function(x) ts(x$Fl,start=c(x$year[1],x$month[1]),freq=12, class = 'ts')) # Output phenology in list form
+sp_wide <- Reduce(ts.intersect, data_ls) # convert to wide format
+sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, 'community', 'sssw','flower') # add to synchrony table
+
+
+# Analyze interspecific fruiting synchrony for Vatovavy using productivity
+data_list <- lapply(split(kphen_sp_fr %>% filter(dataset =='vvsw'), ~species),
+                    function(x) as.list(x)) # transform dataframe into list
+data_ls <-plyr::llply(data_list,.fun=function(x) ts(x$FuFr,start=c(x$year[1],x$month[1]),freq=12, class = 'ts')) # Output phenology in list form
+sp_wide <- Reduce(ts.intersect, data_ls) # convert to wide format
+sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, 'community', 'vvsw','fruit') # add to synchrony table
+
+# Analyze interspecific fruiting synchrony for Sangasanga using productivity
+data_list <- lapply(split(kphen_sp_fr %>% filter(dataset =='sssw'), ~species),
+                    function(x) as.list(x)) # transform dataframe into list
+data_ls <-plyr::llply(data_list,.fun=function(x) ts(x$FuFr,start=c(x$year[1],x$month[1]),freq=12, class = 'ts')) # Output phenology in list form
+sp_wide <- Reduce(ts.intersect, data_ls) # convert to wide format
+sync_df[nrow(sync_df)+1,] <- comm_sync_wrapper(sp_wide, 'community', 'sssw','fruit') # add to synchrony table
+
+write.csv(sync_df, 'phen_species_sync_output.csv')
+
+sync_df
+```

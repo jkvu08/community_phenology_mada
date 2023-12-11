@@ -15,14 +15,8 @@ Manuscript title: Temperature and rainfall seasonality drives tropical community
 First set up working environment and load in relevant files
 ```{r, setup, echo=F, message=F, warning=F}
 # set working directory for all chunks
-setwd("C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada")
-knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada") 
-
-# set up working directory 
-#setwd("C:/data")
-
-# set up directory to save figures
-#figpath <- "C:/figures"
+setwd("C:/community_phenology_mada")
+knitr::opts_knit$set(root.dir = "C:/community_phenology_mada") 
 ```
 
 ```{r, echo=T, message=F, warning=F}
@@ -576,13 +570,6 @@ fri_plot <- ggplot(cycle_individual_sample, aes(x = n, y = samples)) +
 
 # plot sample sizes
 grid.arrange(fli_plot, fri_plot, fls_plot, frs_plot, nrow =2, ncol = 2)
-
-# # # restrict analyses to individuals and species that underwent at least 3 cycles 
-# cycle_summary3 <- cycle_summary[which(cycle_summary$n > 2),]
-# write.csv(cycle_summary, 'phen_cycle_character_summary.csv') # save table
-# 
-# # correspondingly subset the cycle characteristic table with the plants that have at least 3 cycles
-# cycle_df3 <- cycle_df[which(cycle_df$ID %in% cycle_summary3$ID),]
 ```
 
 **The flowering and fruiting phenologies were characterized for how many individuals and species?**\
