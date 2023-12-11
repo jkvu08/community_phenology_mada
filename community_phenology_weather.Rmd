@@ -86,6 +86,8 @@ transition - 0/1 indicates if the record occurs at the transition between the dr
 head(kphen_pop_fr) 
 ```
 
+#### Visualize 
+
 Get distribution of the responses
 ```{r, echo = T, warning = F, message = T}
 par(mfrow = c(2,3))
@@ -720,6 +722,10 @@ rad_plot <- base_iplot +
 plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
 ```
 
+#### Model
+Prop of individuals and taxa flowering/fruiting will be modeled as logistic regression\
+Proportional productivity will be modeled as a beta regression\
+
 Format data for generalized linear models\
 
 Relevant columns:\
@@ -1162,15 +1168,13 @@ interaction.plot(comm_fr_std$rad,
 ```
 solar insolation interactions for all metrics
 
-# ```{r, echo = T, message = T, warning =F}
-# # function to calculate pseudo R2 for poisson
-# pseudor2 <- function(model){
-#   return(1 - (model$deviance/model$null.deviance))
-# }
-# ```
-
 GLM evaluation functions 
 ```{r, echo = T, message = F, warning =F}
+# function to calculate pseudo R2 for logistic
+pseudor2 <- function(model){
+  return(1 - (model$deviance/model$null.deviance))
+}
+
 # Function to generate AIC table and best model parameters
 aic_best <- function(models, stage, response, mtype = F){
   # models: list of models
@@ -1180,7 +1184,7 @@ aic_best <- function(models, stage, response, mtype = F){
   
   # calculate AIC from list of models
   aictab <- as.data.frame(aictab(models,sort=T, second.ord = T)) 
-  # if mtype is true, then use PseudoR2 function
+  # if mtype is true, then use PseudoR2
   if (mtype == T) {
     aictab$pseudor2 <- unlist(lapply(models, PseudoR2)) # calculate pseudo R2 
     aictab$pseudoR2 <- unlist(lapply(models, function(x) summary(x)$pseudo.r.squared)) # calculate pseudo R2
@@ -1201,7 +1205,6 @@ aic_best <- function(models, stage, response, mtype = F){
     # calculate the model parameter 95% confidence intervals 
     best_df <- cbind(best_df,confint(models[[bestid]]))
   }
-  
   else{ # else logistic model 
     # extract the model parameter coefficient means and 95% confidence intervals
     best_df <- as.data.frame(cbind(summary(models[[bestid]])$coefficients,
@@ -1217,34 +1220,25 @@ aic_best <- function(models, stage, response, mtype = F){
   return(list(aictab, best_df, models[[bestid]]))
 }
 
-
-# Function to plot residuals against fitted.values to test assumption of normality
+# Function to plot residuals against fitted.values
 residual_plot <- function(mod, data, metric){
   # mod: best model
   # data: dataframe
   # metric: response 
   
   # put calculated residuals and extracted fitted values in df
-  glm2_plot <- data.frame("predict" = mod$fitted.values, "res" = mod$fitted.values - data[,metric]) 
+  glm2_plot <- data.frame("predict" = mod$fitted.values, "res" = mod$fitted.values - data[,metric]) # put calculated residuals and extracted fitted values in df
   # title of the plot
-  tname <- paste("Predicted ", metric, " v. Residuals: \n", as.character(mod$call[1]), as.character(mod$call[2])) 
+  tname <- paste("Predicted ", metric, " v. Residuals: \n", as.character(mod$call[1]), as.character(mod$call[2])) # title of the plot
   g <- ggplot(glm2_plot, aes(x = predict, y = res)) + 
     geom_point(size = 2, color = "black") +
     theme_bw(base_size = 10) + 
     labs(title = tname, x = paste("predicted", metric), y = "residuals") # set the graph labels
   return(g)
 }
+```
 
-plot_fun <- function(mod, data, metric){
-  glm2_plot <- data.frame("predict" = mod$fitted.values, "res" = mod$fitted.values - data[,metric]) # put calculated residuals and extracted fitted values in df
-  tname <- paste("Predicted ", metric, " v. Residuals: \n", as.character(mod$call[1]), as.character(mod$call[2])) # title of the plot
-  g <- ggplot(glm2_plot, aes(x = predict, y = res)) + # select data
-    geom_point(size = 2, color = "black")+ # select points and set aesthetic parameters
-    theme_bw(base_size = 10) + # set the background theme
-    labs(title = tname, x = paste("predicted", metric), y = "residuals") # set the graph labels
-  return(g)
-}
-
+```{r, echo = T, message = F, warning =F}
 # Function to plot Q-Q plot and test normality
 norm_check <- function(model, data, metric){
   # mod: best model
@@ -1263,47 +1257,25 @@ norm_check <- function(model, data, metric){
 ```{r, echo = T, message = T, warning =F}
 # using zero sum contrast on onset and years. Aliased: year 2019
 mod1 <- glm(individuals~rain*dataset +rad*dataset + transition + year*dataset,
-            binomial('logit'),
-            data = comm_fl_std, 
-            weights = n)
+            binomial('logit'),data = comm_fl_std, weights = n)
 
 mod2 <- glm(individuals~ rain*dataset +temp*dataset + transition + year*dataset,
-            binomial('logit'),
-            data = comm_fl_std, 
-            weights = n)
+            binomial('logit'),data = comm_fl_std, weights = n)
 
 mod3 <- glm(individuals~rain*dataset +rad + transition + year*dataset,
-            binomial('logit'),
-            data = comm_fl_std, 
-            weights = n)
+            binomial('logit'),data = comm_fl_std, weights = n)
 
 mod4 <- glm(individuals~rain*dataset +temp + transition + year*dataset,
-            binomial('logit'),
-            data = comm_fl_std, 
-            weights = n)
+            binomial('logit'),data = comm_fl_std, weights = n)
 
 mod5 <- glm(individuals~rain*dataset + transition + year*dataset,
-            binomial('logit'),
-            data = comm_fl_std,
-            weights = n)
+            binomial('logit'),data = comm_fl_std, weights = n)
 
 mod6 <- glm(individuals~rain*dataset + transition + year,
-            binomial('logit'),
-            data = comm_fl_std, 
-            weights = n)
-
-mod7 <- glm(individuals~ transition + year,
-            binomial('logit'),
-            data = comm_fl_std, 
-            weights = n)
-
-mod8 <- glm(individuals~ rain + transition + year,
-            binomial('logit'),
-            data = comm_fl_std, 
-            weights = n)
+            binomial('logit'),data = comm_fl_std, weights = n)
 
 # generate aic and extract information from best model
-ikfli <- aic_best(list(mod1,mod2,mod3,mod4,mod5, mod6, mod7, mod8), 'flower','individual')
+ikfli <- aic_best(list(mod1,mod2,mod3,mod4,mod5, mod6), 'flower','individual')
 
 # assign best model object
 fli_best <- ikfli[[3]] 
@@ -1316,15 +1288,14 @@ summary(fli_best)
 
 # plot residuals
 residual_plot(fli_best, comm_fl_std, 'individuals')
-
-# Q-Q plot & normality check 
-norm_check(fli_best, comm_fl_std, 'individuals')
 ```
 Visualize relationship between individual flowering and best model variables
 ```{r, echo = T, message = T, warning = F}
 # plot boxplot of prop. of individuals flowering within and outside of the dry-to-wet season transition
-flitran <- ggplot(kphen_pop_fl, aes(y = individuals, x = as.factor(transition), 
-                                    group = as.factor(transition))) +
+flitran <- ggplot(kphen_pop_fl, 
+                  aes(y = individuals, 
+                      x = as.factor(transition), 
+                      group = as.factor(transition))) +
                 geom_boxplot(aes()) +
                 theme_minimal() + 
                 ylab('proportion of individuals') +
@@ -1335,7 +1306,10 @@ flitran <- ggplot(kphen_pop_fl, aes(y = individuals, x = as.factor(transition),
                 scale_x_discrete(labels = c('Jan-Sep', 'Oct-Dec'))
 
 # plot boxplot of prop. of individuals flowering between communites
-flic <- ggplot(kphen_pop_fl, aes(y = individuals, x = dataset, group = dataset)) +
+flic <- ggplot(kphen_pop_fl, 
+               aes(y = individuals, 
+                   x = dataset, 
+                   group = dataset)) +
             geom_boxplot(aes(color = dataset)) +
             theme_minimal() + 
             ylab('proportion of individuals') +
@@ -1347,19 +1321,20 @@ flic <- ggplot(kphen_pop_fl, aes(y = individuals, x = dataset, group = dataset))
             scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
   
 # plot estimated relationship between rain and prop. of individuals flowering 
-flir <- plot(ggpredict(fli_best, terms = c("rain[all]","dataset"), type = 'fe'),
-                        ci = T, 
-                        add.data =T, 
-                        colors = 'metro', 
-                        jitter = 0.0001, 
-                        show.legend= F,
-                        show.title = F, 
-                        dot.size=1,
-                        dot.alpha=0.2) +
+flir <- plot(ggpredict(fli_best, 
+                       terms = c("rain[all]","dataset"), 
+                       type = 'fe'),
+                       ci = T, 
+                       add.data =T, 
+                       colors = 'metro', 
+                       jitter = 0.0001, 
+                       show.legend= F,
+                       show.title = F, 
+                       dot.size=1,
+                       dot.alpha=0.2) +
               xlab('cumulative monthly rainfall (mm)') +
-              ylab('proportion of individuals') +
-              scale_x_continuous(limits = c(0, 1), 
-                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
+              ylab('proportion of individuals') + 
+              scale_x_continuous(labels = ~round(.*sd(kphen_pop_fl$rain) + mean(kphen_pop_fl$rain),0)) +
               scale_y_continuous(limits = c(0, 0.4), 
                                  labels = c(0,0.1,0.2,0.3,0.4)) +
               theme(legend.position = 'None',
@@ -1367,7 +1342,9 @@ flir <- plot(ggpredict(fli_best, terms = c("rain[all]","dataset"), type = 'fe'),
                     axis.text = element_text(size = 8))
 
 # plot estimated relationship between temp and prop. of individuals flowering 
-flit <- plot(ggpredict(fli_best, terms = c("temp[all]","dataset"), type = 'fe'),
+flit <- plot(ggpredict(fli_best, 
+                       terms = c("temp[all]","dataset"), 
+                       type = 'fe'),
                        ci = T, 
                        add.data =T, 
                        colors = 'metro', 
@@ -1378,8 +1355,7 @@ flit <- plot(ggpredict(fli_best, terms = c("temp[all]","dataset"), type = 'fe'),
                        dot.alpha=0.2) +
               xlab('mean monthly temp (C)') +
               ylab('proportion of individuals') +
-              scale_x_continuous(limits = c(0, 1), 
-                                 breaks = c(0, 0.217,0.399,0.58,0.76,0.947), labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fl$temp, na.rm =T)-min(kphen_pop_fl$temp, na.rm =T)) + min(kphen_pop_fl$temp, na.rm =T),0)) +
+              scale_x_continuous(labels = ~round(.*sd(kphen_pop_fl$temp) + mean(kphen_pop_fl$temp),0)) +
               scale_y_continuous(limits = c(0, 0.4), 
                                  labels = c(0,0.1,0.2,0.3,0.4)) +
               theme(legend.position = 'None',
@@ -1387,7 +1363,10 @@ flit <- plot(ggpredict(fli_best, terms = c("temp[all]","dataset"), type = 'fe'),
                     axis.text = element_text(size = 8))
 
 # plot boxplot of prop. of individuals flowering across years
-fliy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = individuals, x = as.factor(year), color = dataset)) +
+fliy <- ggplot(kphen_pop_fl %>% filter(year > 2010), 
+               aes(y = individuals, 
+                   x = as.factor(year), 
+                   color = dataset)) +
               geom_boxplot(position = "dodge") +
               theme_minimal() + 
               ylab('proportion of individuals') +
@@ -1400,8 +1379,7 @@ fliy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = individuals, x = as
 # arrange plots into one figure and view
 grid.arrange(arrangeGrob(flic, flitran,flir,flit, ncol=4, nrow=1),
          arrangeGrob(fliy, ncol=1, nrow=1),  
-         ncol = 1,nrow=2)
-                                         
+         ncol = 1,nrow=2)                     
 ```
 
 **GLM for flower diversity with community interactions**
@@ -1440,10 +1418,7 @@ ikflsp[[1]]
 summary(flsp_best)
 
 # plot residuals
-plot_fun(best_models[[3]], comm_fl_std, 'sprich')
-
-# Q-Q plot & normality check 
-norm_check(best_models[[3]], comm_fl_std, 'sprich') 
+residual_plot(ikflsp[[3]], comm_fl_std, 'sprich')
 ```
 
 Visualize relationship between taxa flowering and best model variables
@@ -1486,8 +1461,7 @@ flspr <- plot(ggpredict(flsp_best, terms = c("rain[all]","dataset"), type = 'fe'
                 theme(legend.position = 'None',
                       text = element_text(size = 8), 
                       axis.text = element_text(size = 8)) +
-                scale_x_continuous(limits = c(0, 1), 
-                                   labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
+                scale_x_continuous(labels = ~round(.*sd(kphen_pop_fl$rain) + mean(kphen_pop_fl$rain),0)) +
                 scale_y_continuous(limits = c(0, 0.5), 
                                    labels = c(0,0.1,0.2,0.3,0.4,0.5))
 
