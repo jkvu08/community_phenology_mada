@@ -272,310 +272,397 @@ plot_grid(fri_box, frsp_box, frprod_box, nrow = 3, ncol=1)
 Visualize phenology as time series across dates
 ```{r, echo =T, message = F, warning=F}
 # plot time series of prop flowering individuals 
-fl_ploti <- ggplot(kphen_pop_fl, aes(x = Date, y = individuals)) +
-              geom_line(size = 1) +
+base_iplot <- ggplot(kphen_pop_fl, 
+                     aes(x = Date, y = individuals)) +
+                geom_line(size = 1) +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_rect('white')) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'top', 
+                           scales = 'free_y')
+
+# get rain plot
+rain_plot <- base_iplot + 
               geom_line(aes(x = Date, y =rain/1200), 
                         linetype = 'solid', 
                         colour = '#56B4E9',
                         linewidth = 0.5) +
-              geom_line(aes(x = Date, y = rad/400000), 
-                        linetype = 'solid', 
-                        colour = '#E69F00',
-                        linewidth = 0.5) +
+              scale_y_continuous(sec.axis = sec_axis(~.*1200, name = 'rain (mm)'), 
+                                 name = 'prop. of individuals fl')
+
+temp_plot <- base_iplot + 
               geom_line(aes(x = Date, y =temp/40), 
                         linetype = 'solid', 
                         colour = '#D55E00',
                         linewidth = 0.5) +
-              scale_y_continuous(sec.axis = sec_axis(~.*1200, name = 'rain (mm)'), 
-                                 name = 'prop. of individuals') +
-              geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
-                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
-                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
-                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
-                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
-                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
-                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
-                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
-                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
-                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
-              geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
-                    ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-              scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
-                                                         to = as.Date('2019-12-31'),
-                                                         by = "1 year"), 
-                           date_labels = "%Y") +
-              theme_bw(base_size=10) +
-              theme(strip.background = element_blank(),
-                      strip.text.y = element_blank()) +
-              facet_wrap(~dataset,
-                         ncol=2, 
-                         strip.position = 'right', 
-                         scales = 'free_y')
+              scale_y_continuous(sec.axis = sec_axis(~.*40, name = 'temperature (C)'), 
+                                 name = 'prop. of individuals fl')
 
-# plot time series of prop fruiting individuals 
-fr_ploti <- ggplot(kphen_pop_fr, aes(x = Date, y = individuals)) +
-                geom_line(size = 1) +
-                geom_line(aes(x = Date, y =rain/1200), 
-                          linetype = 'solid', 
-                          colour = '#56B4E9',
-                          linewidth = 0.5) +
-                geom_line(aes(x = Date, y = rad/400000), 
-                          linetype = 'solid', 
-                          colour = '#E69F00',
-                          linewidth = 0.5) +
-                geom_line(aes(x = Date, y =temp/40), 
-                          linetype = 'solid', 
-                          colour = '#D55E00',
-                          linewidth = 0.5) +
-                scale_y_continuous(sec.axis = sec_axis(~.*1200, name = 'rain (mm)'), 
-                                   name = 'prop. of individuals') +
-                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
-                                                           to = as.Date('2019-12-31'),
-                                                           by = "1 year"), 
-                             date_labels = "%Y") +
-                theme_bw(base_size=10) +
-                theme(strip.background = element_blank(),
-                        strip.text.y = element_blank()) +
-                facet_wrap(~dataset,
-                           ncol=2, 
-                           strip.position = 'right', 
-                           scales = 'free_y')
+rad_plot <- base_iplot + 
+              geom_line(aes(x = Date, y = rad/400000), 
+                        linetype = 'solid', 
+                        colour = '#E69F00',
+                        linewidth = 0.5) +
+              scale_y_continuous(sec.axis = sec_axis(~.*400000, name = 'solar insolation (W/m2)'), 
+                                 name = 'prop. of individuals fl')
 
-# plot time series of prop flowering taxa
-fl_plotsp <- ggplot(kphen_pop_fl, aes(x = Date, y = sprich)) +
-                geom_line(size = 1) +
-                geom_line(aes(x = Date, y =rain/1800), 
-                          linetype = 'solid', 
-                          colour = '#56B4E9',
-                          linewidth = 0.7) +
-                geom_line(aes(x = Date, y = rad/600000), 
-                          linetype = 'solid', 
-                          colour = '#E69F00',
-                          linewidth = 0.7) +
-                geom_line(aes(x = Date, y =temp/60), 
-                          linetype = 'solid', 
-                          colour = '#D55E00',
-                          linewidth = 0.7) +
-                scale_y_continuous(sec.axis = sec_axis(~.*1800, name = 'temperature (C)'), 
-                                   name = 'prop. of taxa') +
-                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
-                    ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
-                                                           to = as.Date('2019-12-31'),
-                                                           by = "1 year"), 
-                             date_labels = "%Y") +
-                theme_bw(base_size=10) +
-                theme(strip.background = element_blank(),
-                        strip.text.y = element_blank()) +
-                facet_wrap(~dataset,
-                           ncol=2, 
-                           strip.position = 'right', 
-                           scales = 'free_y')
-
-# plot time series of prop fruiting taxa
-fr_plotsp <- ggplot(kphen_pop_fr, aes(x = Date, y = sprich))+
-                geom_line(size = 1) +
-                geom_line(aes(x = Date, y =rain/1800), 
-                          linetype = 'solid', 
-                          colour = '#56B4E9',
-                          linewidth = 0.7) +
-                geom_line(aes(x = Date, y = rad/600000), 
-                          linetype = 'solid', 
-                          colour = '#E69F00',
-                          linewidth = 0.7) +
-                geom_line(aes(x = Date, y =temp/60), 
-                          linetype = 'solid', 
-                          colour = '#D55E00',
-                          linewidth = 0.7) +
-                scale_y_continuous(sec.axis = sec_axis(~.*1800, name = 'temperature (C)'), 
-                                   name = 'prop. of taxa') +
-                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
-                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
-                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
-                                                           to = as.Date('2019-12-31'),
-                                                           by = "1 year"), 
-                             date_labels = "%Y") +
-                theme_bw(base_size=10) +
-                theme(strip.background = element_blank(),
-                        strip.text.y = element_blank()) +
-                facet_wrap(~dataset,
-                           ncol=2, 
-                           strip.position = 'right', 
-                           scales = 'free_y')
-
-# plot time series of flowering productivity
-fl_plotprod <- ggplot(kphen_pop_fl, aes(x = Date, y = productivity)) +
-                  geom_line(size = 1) +                
-                  geom_line(aes(x = Date, y =rain/4000), 
-                            linetype = 'solid', 
-                            colour = '#56B4E9',
-                            linewidth = 0.7) +
-                  geom_line(aes(x = Date, y = rad/1200000), 
-                            linetype = 'solid', 
-                            colour = '#E69F00',
-                            linewidth = 0.7) +
-                  geom_line(aes(x = Date, y =temp/300), 
-                            linetype = 'solid', 
-                            colour = '#D55E00',
-                            linewidth = 0.7) +
-                  scale_y_continuous(sec.axis = sec_axis(~.*4000, name = 'solar radiation'), 
-                                     name = 'prop. productivity') +
-                  geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
-                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
-                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
-                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
-                                                             to = as.Date('2019-12-31'),
-                                                             by = "1 year"), 
-                               date_labels = "%Y") +
-                  theme_bw(base_size=10) +
-                  theme(strip.background = element_blank(),
-                          strip.text.y = element_blank()) +
-                  facet_wrap(~dataset,
-                             ncol=2, 
-                             strip.position = 'right', 
-                             scales = 'free_y')
-
-fr_plotprod <- ggplot(kphen_pop_fr, aes(x = Date, y = productivity)) +
-                  geom_line(size = 1) +                
-                  geom_line(aes(x = Date, y =rain/4000), 
-                            linetype = 'solid', 
-                            colour = '#56B4E9',
-                            linewidth = 0.7) +
-                  geom_line(aes(x = Date, y = rad/1200000), 
-                            linetype = 'solid', 
-                            colour = '#E69F00',
-                            linewidth = 0.7) +
-                  geom_line(aes(x = Date, y =temp/300), 
-                            linetype = 'solid', 
-                            colour = '#D55E00',
-                            linewidth = 0.7) +
-                  scale_y_continuous(sec.axis = sec_axis(~.*4000, name = 'solar radiation'), 
-                                     name = 'prop. productivity') +
-                  geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
-                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
-                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
-                        ymin = -Inf, ymax = Inf), alpha = 0.005) +
-                  geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
-                        ymin = -Inf, ymax = Inf),  alpha = 0.005) +
-                  scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
-                                                             to = as.Date('2019-12-31'),
-                                                             by = "1 year"), 
-                               date_labels = "%Y") +
-                  theme_bw(base_size=10) +
-                  theme(strip.background = element_blank(),
-                          strip.text.y = element_blank()) +
-                  facet_wrap(~dataset,
-                             ncol=2, 
-                             strip.position = 'right', 
-                             scales = 'free_y')
 
 # arrange figure and output 
-plot_grid(fl_ploti,fl_plotsp,fl_plotprod, fr_ploti,fr_plotsp,fr_plotprod, nrow = 6, ncol=1)
+plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
+```
 
-# save plot
-ml <- marrangeGrob(list(fl_ploti,fl_plotsp,fl_plotprod, fr_ploti,fr_plotsp,fr_plotprod), nrow = 6, ncol=1)
-# save plot
-ggsave(file = paste0(figpath, '/comm_phen_timeseries_prop.png'),
-       plot = ml,
-       width = 6.5, 
-       height = 8, 
-       units = 'in')
+```{r, echo =T, message = F, warning=F}
+# plot time series of prop fruiting individuals 
+base_iplot <- ggplot(kphen_pop_fr, aes(x = Date, y = individuals)) +
+                geom_line(size = 1) +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_rect('white')) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'top', 
+                           scales = 'free_y')
 
+# get rain plot
+rain_plot <- base_iplot + 
+              geom_line(aes(x = Date, y =rain/1200), 
+                        linetype = 'solid', 
+                        colour = '#56B4E9',
+                        linewidth = 0.5) +
+              scale_y_continuous(sec.axis = sec_axis(~.*1200, name = 'rain (mm)'), 
+                                 name = 'prop. of individuals fr')
+
+temp_plot <- base_iplot + 
+              geom_line(aes(x = Date, y =temp/40), 
+                        linetype = 'solid', 
+                        colour = '#D55E00',
+                        linewidth = 0.5) +
+              scale_y_continuous(sec.axis = sec_axis(~.*40, name = 'temperature (C)'), 
+                                 name = 'prop. of individuals fr')
+
+rad_plot <- base_iplot + 
+              geom_line(aes(x = Date, y = rad/400000), 
+                        linetype = 'solid', 
+                        colour = '#E69F00',
+                        linewidth = 0.5) +
+              scale_y_continuous(sec.axis = sec_axis(~.*400000, name = 'solar insolation (W/m2)'), 
+                                 name = 'prop. of individuals fr')
+
+
+# arrange figure and output 
+plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
+```
+
+```{r, echo =T, message = F, warning=F}
+# plot time series of prop flowering taxa 
+base_iplot <- ggplot(kphen_pop_fl, 
+                     aes(x = Date, y = sprich)) +
+                geom_line(size = 1) +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_rect('white')) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'top', 
+                           scales = 'free_y')
+
+# get rain plot
+rain_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =rain/1800), 
+                          linetype = 'solid', 
+                          colour = '#56B4E9',
+                          linewidth = 0.7) +
+                scale_y_continuous(sec.axis = sec_axis(~.*1800, name = 'rain (mm)'), 
+                                   name = 'prop. of taxa fl')
+
+temp_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =temp/60), 
+                          linetype = 'solid', 
+                          colour = '#D55E00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*60, name = 'temperature (C)'), 
+                                 name = 'prop. of taxa fl')
+
+rad_plot <- base_iplot + 
+              geom_line(aes(x = Date, y = rad/600000), 
+                          linetype = 'solid', 
+                          colour = '#E69F00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*600000, name = 'solar insolation (W/m2)'), 
+                                 name = 'prop. of taxa fl')
+
+
+# arrange figure and output 
+plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
+```
+
+```{r, echo =T, message = F, warning=F}
+# plot time series of prop fruiting taxa 
+base_iplot <- ggplot(kphen_pop_fr, 
+                     aes(x = Date, y = sprich)) +
+                geom_line(size = 1) +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_rect('white')) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'top', 
+                           scales = 'free_y')
+
+# get rain plot
+rain_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =rain/1800), 
+                          linetype = 'solid', 
+                          colour = '#56B4E9',
+                          linewidth = 0.7) +
+                scale_y_continuous(sec.axis = sec_axis(~.*1800, name = 'rain (mm)'), 
+                                   name = 'prop. of taxa fr')
+
+temp_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =temp/60), 
+                          linetype = 'solid', 
+                          colour = '#D55E00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*60, name = 'temperature (C)'), 
+                                 name = 'prop. of taxa fr')
+
+rad_plot <- base_iplot + 
+              geom_line(aes(x = Date, y = rad/600000), 
+                          linetype = 'solid', 
+                          colour = '#E69F00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*600000, name = 'solar insolation (W/m2)'), 
+                                 name = 'prop. of taxa fr')
+
+
+# arrange figure and output 
+plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
+```
+
+```{r, echo =T, message = F, warning=F}
+# plot time series of proportional flowering productivity
+base_iplot <- ggplot(kphen_pop_fl, 
+                     aes(x = Date, y = productivity)) +
+                geom_line(size = 1) +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_rect('white')) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'top', 
+                           scales = 'free_y')
+
+# get rain plot
+rain_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =rain/4000), 
+                          linetype = 'solid', 
+                          colour = '#56B4E9',
+                          linewidth = 0.7) +
+                scale_y_continuous(sec.axis = sec_axis(~.*4000, name = 'rain (mm)'), 
+                                   name = 'prop. productivity fl')
+
+temp_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =temp/300), 
+                          linetype = 'solid', 
+                          colour = '#D55E00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*300, name = 'temperature (C)'), 
+                                 name = 'prop. productivity fl')
+
+rad_plot <- base_iplot + 
+              geom_line(aes(x = Date, y = rad/1200000), 
+                          linetype = 'solid', 
+                          colour = '#E69F00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*1200000, name = 'solar insolation (W/m2)'), 
+                                 name = 'prop. productivity fl')
+
+
+# arrange figure and output 
+plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
+```
+
+```{r, echo =T, message = F, warning=F}
+# plot time series of proportional flowering productivity
+base_iplot <- ggplot(kphen_pop_fr, 
+                     aes(x = Date, y = productivity)) +
+                geom_line(size = 1) +
+                geom_rect(aes(xmin = as.Date('2010-10-01'), xmax = as.Date('2010-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2011-10-01'), xmax = as.Date('2011-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2012-10-01'), xmax = as.Date('2012-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2013-10-01'), xmax = as.Date('2013-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2014-10-01'), xmax = as.Date('2014-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2015-10-01'), xmax = as.Date('2015-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2016-10-01'), xmax = as.Date('2016-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2017-10-01'), xmax = as.Date('2017-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2018-10-01'), xmax = as.Date('2018-12-31'),
+                      ymin = -Inf, ymax = Inf), alpha = 0.005) +
+                geom_rect(aes(xmin = as.Date('2019-10-01'), xmax = as.Date('2019-12-31'),
+                      ymin = -Inf, ymax = Inf),  alpha = 0.005) +
+                scale_x_date(breaks = function(x) seq.Date(from = as.Date('2010-07-01'),
+                                                           to = as.Date('2019-12-31'),
+                                                           by = "1 year"), 
+                             date_labels = "%Y") +
+                theme_bw(base_size=10) +
+                theme(strip.background = element_rect('white')) +
+                facet_wrap(~dataset,
+                           ncol=2, 
+                           strip.position = 'top', 
+                           scales = 'free_y')
+
+# get rain plot
+rain_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =rain/4000), 
+                          linetype = 'solid', 
+                          colour = '#56B4E9',
+                          linewidth = 0.7) +
+                scale_y_continuous(sec.axis = sec_axis(~.*4000, name = 'rain (mm)'), 
+                                   name = 'prop. productivity fr')
+
+temp_plot <- base_iplot + 
+               geom_line(aes(x = Date, y =temp/300), 
+                          linetype = 'solid', 
+                          colour = '#D55E00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*300, name = 'temperature (C)'), 
+                                 name = 'prop. productivity fr')
+
+rad_plot <- base_iplot + 
+              geom_line(aes(x = Date, y = rad/1200000), 
+                          linetype = 'solid', 
+                          colour = '#E69F00',
+                          linewidth = 0.7) +
+              scale_y_continuous(sec.axis = sec_axis(~.*1200000, name = 'solar insolation (W/m2)'), 
+                                 name = 'prop. productivity fr')
+
+
+# arrange figure and output 
+plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
 ```
 
 Format data for GLMs\
