@@ -23,10 +23,13 @@ Characterization of the flowering and fruiting cycle of plants in Kianjavato at 
 
 ## Content
 
-    1. community_phenology_cyclicity.Rmd - R Markdown code for characterizing individual and species phenology data across months in Kianjavato Madagascar based on the Newstrom et al. 1994 methods.
-    2. community_phenology_weather.Rmd - R Markdown code for investigating the association between weather and plant phenology to identify the weather conditions under which community flowering and fruiting peaked in southeastern Madagascar. 
-    3. sample_flowering_pattern.png - Sample time series of the flowering phenology of 8 individuals of a particular species.
-
+    1. community_phenology_cyclicity.Rmd - Code for characterizing individual and species phenology data across months in Kianjavato Madagascar based on the Newstrom et al. 1994 methods.
+    2. community_phenology_cyclicity.html - R Markdown html for characterizing individual and species phenology data across months in Kianjavato Madagascar based on the Newstrom et al. 1994 methods.
+    3. community_phenology_synchrony.Rmd - Code for quantifying interspecific and intraspecific flowering and fruiting synchrony using Loreau's synchrony metric.
+    4. community_phenology_synchrony.html - R Markdown html for quantifying interspecific and intraspecific flowering and fruiting synchrony using Loreau's synchrony metric.
+    5. community_phenology_weather.Rmd - Code for investigating the association between weather and plant phenology to identify the weather conditions under which community flowering and fruiting peaked in southeastern Madagascar. 
+    6. community_phenology_weather.html - R Markdown html for investigating the association between weather and plant phenology to identify the weather conditions under which community flowering and fruiting peaked in southeastern Madagascar. 
+    
 ## Support
 
 For support, email jannetkimvu@ucla.edu.
