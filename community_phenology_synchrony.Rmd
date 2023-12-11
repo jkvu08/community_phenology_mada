@@ -12,9 +12,7 @@ Manuscript title: Temperature and rainfall seasonality drives tropical community
 First set up working environment and load in relevant files
 ```{r, setup, echo=F, message=F, warning=F}
 #set up working directory
-#setwd("C:/community_phenology_mada")
-setwd("C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada")
-knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada") 
+setwd("C:/community_phenology_mada")
 ```
 
 ```{r, echo=T, message=F, warning=F}
