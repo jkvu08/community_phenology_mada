@@ -41,14 +41,24 @@ mthname <- c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","
 
 # load appropriate files
 # data for plant vernacular and Latin names
-plant_names <- read.csv('phen_plantnames.csv', header= T, stringsAsFactors = F) # local plant and Latin names
+plant_names <- read.csv('phen_plantnames.csv', 
+                        header= T, 
+                        stringsAsFactors = F) # local plant and Latin names
 
 # dataset for climatic association analysis
-kphen_pop_fr <- read.csv('kian_phen_pop_fruit_clim.csv', header= T, stringsAsFactors = F)[,-1] 
-kphen_pop_fr$Date <- as.Date(kphen_pop_fr$Date, tz = 'Africa/Nairobi')
+kphen_pop_fr <- read.csv('kian_phen_pop_fruit_clim.csv', 
+                         header= T, 
+                         stringsAsFactors = F)[,-1] 
 
-kphen_pop_fl <- read.csv('kian_phen_pop_flower_clim.csv', header= T, stringsAsFactors = F)[,-1]
-kphen_pop_fl$Date <- as.Date(kphen_pop_fl$Date, tz = 'Africa/Nairobi')
+kphen_pop_fr$Date <- as.Date(kphen_pop_fr$Date, 
+                             tz = 'Africa/Nairobi')
+
+kphen_pop_fl <- read.csv('kian_phen_pop_flower_clim.csv', 
+                         header= T, 
+                         stringsAsFactors = F)[,-1]
+
+kphen_pop_fl$Date <- as.Date(kphen_pop_fl$Date, 
+                             tz = 'Africa/Nairobi')
 ```
 columns:\
 year - year\
@@ -79,20 +89,54 @@ head(kphen_pop_fr)
 Get distribution of the responses
 ```{r, echo = T, warning = F, message = T}
 par(mfrow = c(2,3))
-hist(kphen_pop_fl$individuals[which(kphen_pop_fl$dataset == 'vvsw')], xlab ='prop. of individuals', main = 'Vatovavy flower')
-hist(kphen_pop_fl$sprich[which(kphen_pop_fl$dataset == 'vvsw')], xlab = 'prop. of taxa', main = '')
-hist(kphen_pop_fl$productivity[which(kphen_pop_fl$dataset == 'vvsw')], xlab ='productivity', main = '')
-hist(kphen_pop_fl$individuals[which(kphen_pop_fl$dataset == 'sssw')], xlab ='prop. of individuals', main = 'Sangasanga flower')
-hist(kphen_pop_fl$sprich[which(kphen_pop_fl$dataset == 'sssw')], xlab = 'prop. of taxa', main = '')
-hist(kphen_pop_fl$productivity[which(kphen_pop_fl$dataset == 'sssw')], xlab ='productivity', main = '')
+hist(kphen_pop_fl$individuals[which(kphen_pop_fl$dataset == 'vvsw')], 
+     xlab ='prop. of individuals', 
+     main = 'Vatovavy flower')
+
+hist(kphen_pop_fl$sprich[which(kphen_pop_fl$dataset == 'vvsw')], 
+     xlab = 'prop. of taxa', 
+     main = '')
+
+hist(kphen_pop_fl$productivity[which(kphen_pop_fl$dataset == 'vvsw')], 
+     xlab ='productivity', 
+     main = '')
+
+hist(kphen_pop_fl$individuals[which(kphen_pop_fl$dataset == 'sssw')], 
+     xlab ='prop. of individuals', 
+     main = 'Sangasanga flower')
+
+hist(kphen_pop_fl$sprich[which(kphen_pop_fl$dataset == 'sssw')], 
+     xlab = 'prop. of taxa', 
+     main = '')
+
+hist(kphen_pop_fl$productivity[which(kphen_pop_fl$dataset == 'sssw')], 
+     xlab ='productivity', 
+     main = '')
 
 par(mfrow = c(2,3))
-hist(kphen_pop_fr$individuals[which(kphen_pop_fr$dataset == 'vvsw')], xlab ='prop. of individuals', main = 'Vatovavy fruit')
-hist(kphen_pop_fr$sprich[which(kphen_pop_fr$dataset == 'vvsw')], xlab = 'prop. of taxa', main = '')
-hist(kphen_pop_fr$productivity[which(kphen_pop_fr$dataset == 'vvsw')], xlab ='productivity', main = '')
-hist(kphen_pop_fr$individuals[which(kphen_pop_fr$dataset == 'sssw')], xlab ='prop. of individuals', main = 'Sangasanga fruit')
-hist(kphen_pop_fr$sprich[which(kphen_pop_fr$dataset == 'sssw')], xlab = 'prop. of taxa', main = '')
-hist(kphen_pop_fr$productivity[which(kphen_pop_fr$dataset == 'sssw')], xlab ='productivity', main = '')
+hist(kphen_pop_fr$individuals[which(kphen_pop_fr$dataset == 'vvsw')], 
+     xlab ='prop. of individuals', 
+     main = 'Vatovavy fruit')
+
+hist(kphen_pop_fr$sprich[which(kphen_pop_fr$dataset == 'vvsw')], 
+     xlab = 'prop. of taxa', 
+     main = '')
+
+hist(kphen_pop_fr$productivity[which(kphen_pop_fr$dataset == 'vvsw')], 
+     xlab ='productivity', 
+     main = '')
+
+hist(kphen_pop_fr$individuals[which(kphen_pop_fr$dataset == 'sssw')], 
+     xlab ='prop. of individuals', 
+     main = 'Sangasanga fruit')
+
+hist(kphen_pop_fr$sprich[which(kphen_pop_fr$dataset == 'sssw')], 
+     xlab = 'prop. of taxa', 
+     main = '')
+
+hist(kphen_pop_fr$productivity[which(kphen_pop_fr$dataset == 'sssw')], 
+     xlab ='productivity', 
+     main = '')
 ```
 
 Evaluate the relationship between weather metrics
@@ -100,7 +144,10 @@ Evaluate the relationship between weather metrics
 # examine the correlation plots between the independent variables 
 # Only need to evaluate for community and phenology since same regional data used for both phenology stages and communities
 # local weather data was unavailable for study period
-corrgram(kphen_pop_fl[which(kphen_pop_fl$dataset=='vvsw'),c('rain','temp','rad')], lower.panel =panel.pts, upper.panel= panel.conf,diag.panel = panel.density)
+corrgram(kphen_pop_fl[which(kphen_pop_fl$dataset=='vvsw'),c('rain','temp','rad')], 
+         lower.panel =panel.pts, 
+         upper.panel= panel.conf,
+         diag.panel = panel.density)
 ```
 Temperature and solar radiation are highly correlation, therefore should not be put into the same model. 
 
@@ -194,7 +241,9 @@ fli_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
                   aes(x=as.factor(year),y=individuals))+
                 geom_boxplot(outlier.colour="lightgrey")+
                 theme_minimal(base_size=10) +
-                labs(x = 'year',y ='individual frequency', title = 'flowering')+
+                labs(x = 'year',
+                     y ='individual frequency', 
+                     title = 'flowering')+
                 theme(legend.position = 'none')  +
                 facet_wrap(~dataset, 
                            nrow = 1, 
@@ -206,7 +255,8 @@ flsp_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
                    aes(x=as.factor(year),y=sprich))+
                 geom_boxplot(outlier.colour="lightgrey")+
                 theme_minimal(base_size=10) +
-                labs(x = 'year',y ='taxa richness')+
+                labs(x = 'year',
+                     y ='taxa richness')+
                 theme(legend.position = 'none')  +
                 facet_wrap(~dataset, 
                            nrow = 1, 
@@ -218,7 +268,8 @@ flprod_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
                      aes(x=as.factor(year),y=productivity))+
                   geom_boxplot(outlier.colour="lightgrey")+
                   theme_minimal(base_size=10) +
-                  labs(x = 'year',y ='productivity')+
+                  labs(x = 'year',
+                       y ='productivity')+
                   theme(legend.position = 'none')  +
                   facet_wrap(~dataset, 
                              nrow = 1, 
@@ -235,7 +286,9 @@ fri_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
                   aes(x=as.factor(year),y=individuals)) +
               geom_boxplot(outlier.colour="lightgrey") +
               theme_minimal(base_size=10) +
-              labs(x = 'year',y ='individual frequency', title = 'fruiting') +
+              labs(x = 'year',
+                   y ='individual frequency', 
+                   title = 'fruiting') +
               theme(legend.position = 'none')  +
               facet_wrap(~dataset, 
                          nrow = 1, 
@@ -247,7 +300,8 @@ frsp_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
                    aes(x=as.factor(year),y=sprich)) +
               geom_boxplot(outlier.colour="lightgrey")+
               theme_minimal(base_size=10) +
-              labs(x = 'year',y ='taxa richness')+
+              labs(x = 'year',
+                   y ='taxa richness')+
               theme(legend.position = 'none')  +
               facet_wrap(~dataset, 
                          nrow = 1, 
@@ -259,7 +313,8 @@ frprod_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
                      aes(x=as.factor(year),y=productivity))+
                   geom_boxplot(outlier.colour="lightgrey") +
                   theme_minimal(base_size=10) +
-                  labs(x = 'year',y ='productivity') +
+                  labs(x = 'year',
+                       y ='productivity') +
                   theme(legend.position = 'none') +
                   facet_wrap(~dataset, 
                              nrow = 1, 
@@ -665,9 +720,10 @@ rad_plot <- base_iplot +
 plot_grid(rain_plot, temp_plot, rad_plot, nrow = 3, ncol=1)
 ```
 
-Format data for GLMs\
+Format data for generalized linear models\
 
-Respose variables:\
+Relevant columns:\
+Respose variables\
 individuals - prop of individuals flowering or fruiting\ 
 sprich - prop of taxa flowering or fruiting individuals\
 productivity - fruiting or flowering productivity (sum of phenology across individuals) \
@@ -685,27 +741,30 @@ transition - 0/1 indicates if the record occurs during the wet-to-dry season tra
 comm_fr_std <- kphen_pop_fr
 comm_fl_std <- kphen_pop_fl
 
-# create an individual and species covariate as a metric of effort
-comm_fr_std$indi_cov <- comm_fr_std$individuals
-comm_fl_std$indi_cov <- comm_fl_std$individuals
-
-# normalize the continuous variables
-# calculates normalization for fruit phenology table 
-process <- preProcess(comm_fr_std[,c('rain','temp','rad','indi_cov')], method= 'range')
-
-# applies normalization
-comm_fr_std[,c('rain','temp','rad','indi_cov')] <- predict(process, comm_fr_std[,c('rain','temp','rad','indi_cov')])
-
-# calculates normalization for flower phenology table
-process <- preProcess(comm_fl_std[,c('rain','temp','rad','indi_cov')], method= 'range')
-
-# applies normalization
-comm_fl_std[,c('rain','temp','rad','indi_cov')] <- predict(process, comm_fl_std[,c('rain','temp','rad','indi_cov')])
-
-
 # get rid of records before 2010
 comm_fr_std <- comm_fr_std %>% filter(year > 2010)
 comm_fl_std <- comm_fl_std %>% filter(year > 2010)
+
+# create an individual and taxa as a metric of effort
+comm_fr_std$indi_cov <- comm_fr_std$individuals
+comm_fl_std$indi_cov <- comm_fl_std$individuals
+comm_fr_std$sr_cov <- comm_fr_std$sprich
+comm_fl_std$sr_cov <- comm_fl_std$sprich
+
+# standardize the continuous variables
+# calculates standardization for fruit phenology table 
+process <- preProcess(comm_fr_std[,c('rain','temp','rad','indi_cov','sr_cov')], 
+                      method= c('center','scale'))
+
+# apply standardization
+comm_fr_std[,c('rain','temp','rad','indi_cov','sr_cov')] <- predict(process, comm_fr_std[,c('rain','temp','rad','indi_cov','sr_cov')])
+
+# calculates normalization for flower phenology table
+process <- preProcess(comm_fl_std[,c('rain','temp','rad','indi_cov','sr_cov')], 
+                      method= c('center','scale'))
+
+# apply standardization
+comm_fl_std[,c('rain','temp','rad','indi_cov','sr_cov')] <- predict(process, comm_fl_std[,c('rain','temp','rad','indi_cov','sr_cov')])
 
 # set transition, year, month and dataset as factors
 comm_fr_std$year <- as.factor(comm_fr_std$year)
@@ -729,8 +788,10 @@ contrasts(comm_fr_std$transition) <- contr.treatment(levels(comm_fr_std$transiti
 # sum-to-zero contrast 
 contrasts(comm_fl_std$year) <- contr.sum(levels(comm_fl_std$year))
 contrasts(comm_fr_std$year) <- contr.sum(levels(comm_fr_std$year))
+```
 
-
+```{r, echo = T, message = F, warning = F}
+# productivity modeled using beta regression
 # transformation since flower productivity is 0 for one month in Sangasanga 
 # betareg can only support y in (0,1)
 y_betareg_format <- function(y){
@@ -738,12 +799,7 @@ y_betareg_format <- function(y){
     (y * (n.obs - 1) + 0.5) / n.obs
 }
 
-comm_fl_std$productivity_br <- y_betareg_format(comm_fl_std$productivity)
-
-# function to calculate pseudo R2 for poisson
-pseudor2 <- function(model){
-  return(1 - (model$deviance/model$null.deviance))
-}
+comm_fl_std$productivity_br <- y_betareg_format(comm_fl_std$productivity) # run transformation
 ```
 
 Visualize response distributions
@@ -813,7 +869,7 @@ hist(comm_fr_std$sprich[which(comm_fr_std$dataset =='vvsw')],
      main = '')
 
 ```
-Look at interaction plots between dry-to-wet season transition and community
+Look at interaction plots between dry-to-wet season transition and community flowering
 ```{r,echo=T,message=T, warning=F}
 par(mfrow = c(1,3))
 # interaction plot for flowering individuals 
@@ -842,37 +898,9 @@ interaction.plot(comm_fl_std$dataset,
                  fixed =T,
                  xlab = 'community',
                  ylab = 'productivity')
-
-# # interaction plot for fruiting individuals 
-# interaction.plot(comm_fr_std$dataset, 
-#                  comm_fr_std$transition, 
-#                  comm_fr_std$individuals, 
-#                  col = 1:2, 
-#                  fixed =T,
-#                  xlab = 'community',
-#                  ylab = 'prop. of individuals')
-# 
-# # interaction plot for fruiting taxa
-# interaction.plot(comm_fr_std$dataset, 
-#                  comm_fr_std$transition, 
-#                  comm_fr_std$sprich, 
-#                  col = 1:2, 
-#                  fixed =T,
-#                  xlab = 'community',
-#                  ylab = 'prop. of taxa')
-# 
-# # interaction plot for fruiting productivity
-# interaction.plot(comm_fr_std$dataset, 
-#                  comm_fr_std$transition, 
-#                  comm_fr_std$productivity, 
-#                  col = 1:2, 
-#                  fixed =T,
-#                  xlab = 'community',
-#                  ylab = 'productivity')
 ```
 no transition interactions for flower individual and species rich 
-slight transition interactions for productivity 
-transition interaction for fruit all metrics 
+signs of transition interaction for flower productivity
 
 Look at interaction plots between year and community
 ```{r,echo=T,message=T, warning=F}
@@ -884,7 +912,8 @@ interaction.plot(comm_fl_std$dataset,
                  col = 1:9, 
                  fixed =T,
                  xlab = 'community',
-                 ylab = 'prop. of individuals')
+                 ylab = 'prop. of individuals',
+                 legend = F)
 
 # interaction plot for flowering taxa
 interaction.plot(comm_fl_std$dataset, 
@@ -893,7 +922,8 @@ interaction.plot(comm_fl_std$dataset,
                  col = 1:9, 
                  fixed =T,
                  xlab = 'community',
-                 ylab = 'prop. of taxa')
+                 ylab = 'prop. of taxa',
+                 legend = F)
 
 # interaction plot for flowering productivity
 interaction.plot(comm_fl_std$dataset, 
@@ -902,7 +932,8 @@ interaction.plot(comm_fl_std$dataset,
                  col = 1:9, 
                  fixed =T,
                  xlab = 'community',
-                 ylab = 'productivity')
+                 ylab = 'productivity',
+                 legend = F)
 
 # interaction plot for fruiting individuals 
 interaction.plot(comm_fr_std$dataset, 
@@ -911,7 +942,8 @@ interaction.plot(comm_fr_std$dataset,
                  col = 1:9, 
                  fixed =T,
                  xlab = 'community',
-                 ylab = 'prop. of individuals')
+                 ylab = 'prop. of individuals',
+                 legend = F)
 
 # interaction plot for fruiting taxa
 interaction.plot(comm_fr_std$dataset, 
@@ -920,7 +952,8 @@ interaction.plot(comm_fr_std$dataset,
                  col = 1:9, 
                  fixed =T,
                  xlab = 'community',
-                 ylab = 'prop. of taxa')
+                 ylab = 'prop. of taxa',
+                 legend = F)
 
 # interaction plot for fruiting productivity
 interaction.plot(comm_fr_std$dataset, 
@@ -929,10 +962,11 @@ interaction.plot(comm_fr_std$dataset,
                  col = 1:9, 
                  fixed =T,
                  xlab = 'community',
-                 ylab = 'productivity')
+                 ylab = 'productivity',
+                 legend = F)
 ```
-year interactions for all flower and fruit metrics 
-
+year interactions for all flower and fruit metrics \
+\
 Look at interaction plots between rain and community
 ```{r,echo=T,message=T, warning=F}
 par(mfrow = c(2,3))
@@ -1127,6 +1161,13 @@ interaction.plot(comm_fr_std$rad,
                  legend = F)
 ```
 solar insolation interactions for all metrics
+
+# ```{r, echo = T, message = T, warning =F}
+# # function to calculate pseudo R2 for poisson
+# pseudor2 <- function(model){
+#   return(1 - (model$deviance/model$null.deviance))
+# }
+# ```
 
 GLM evaluation functions 
 ```{r, echo = T, message = F, warning =F}
