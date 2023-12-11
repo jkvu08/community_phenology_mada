@@ -12,11 +12,11 @@ Manuscript title: Temperature and rainfall seasonality drives tropical community
 First set up working environment and load in relevant files
 ```{r, setup, echo=F, message=F, warning=F}
 # set working directory for all chunks
-setwd("C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada")
-knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada") 
+setwd("C:/community_phenology_mada")
+knitr::opts_knit$set(root.dir = "C:/community_phenology_mada") 
 ```
 
-```{r, setup, echo=T, message=FALSE, warning=FALSE}
+```{r, echo=T, message=FALSE, warning=FALSE}
 # load in packages
 library(dplyr)
 library(lubridate)
@@ -81,13 +81,12 @@ rad - cumulative monthly solar radiation $(Wm^-2)$\
 onset - 0/1 indicates if the record occurs at the onset of the wet season (November -January)
 transition - 0/1 indicates if the record occurs at the transition between the dry and wet season (October-December)
 
-````{r, echo = T, warning = F, message = F}
+```{r, echo = T, warning = F, message = F}
 # visualize to get sense of data
 head(kphen_pop_fr) 
 ```
 
 #### Visualize 
-
 Get distribution of the responses
 ```{r, echo = T, warning = F, message = T}
 par(mfrow = c(2,3))
@@ -151,6 +150,7 @@ corrgram(kphen_pop_fl[which(kphen_pop_fl$dataset=='vvsw'),c('rain','temp','rad')
          upper.panel= panel.conf,
          diag.panel = panel.density)
 ```
+\
 Temperature and solar radiation are highly correlation, therefore should not be put into the same model. 
 
 Visualize community phenology across months for flowering 
@@ -195,7 +195,7 @@ flprod_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
 
 plot_grid(fli_box, flsp_box, flprod_box, nrow = 3, ncol=1)
 ```
-
+\
 Visualize community phenology across months for flowering 
 ```{r, echo = T, message = T, warning = F}
 # generate boxplot of prop of individuals fruiting across months
@@ -875,6 +875,7 @@ hist(comm_fr_std$sprich[which(comm_fr_std$dataset =='vvsw')],
      main = '')
 
 ```
+\
 Look at interaction plots between dry-to-wet season transition and community flowering
 ```{r,echo=T,message=T, warning=F}
 par(mfrow = c(1,3))
@@ -905,9 +906,10 @@ interaction.plot(comm_fl_std$dataset,
                  xlab = 'community',
                  ylab = 'productivity')
 ```
+\
 no transition interactions for flower individual and species rich 
 signs of transition interaction for flower productivity
-
+\
 Look at interaction plots between year and community
 ```{r,echo=T,message=T, warning=F}
 par(mfrow = c(2,3))
@@ -971,6 +973,7 @@ interaction.plot(comm_fr_std$dataset,
                  ylab = 'productivity',
                  legend = F)
 ```
+
 year interactions for all flower and fruit metrics \
 \
 Look at interaction plots between rain and community
@@ -1036,8 +1039,9 @@ interaction.plot(comm_fr_std$rain,
                  xlab = 'productivity',
                  legend = F)
 ```
-rain interactions for all metrics
 
+rain interactions for all metrics\
+\
 Look at interaction plots between temperature and community
 ```{r,echo=T,message=T, warning=F}
 par(mfrow = c(2,3))
@@ -1101,8 +1105,9 @@ interaction.plot(comm_fr_std$temp,
                  xlab = 'productivity',
                  legend = F)
 ```
-temp interactions for all metrics 
 
+temp interactions for all metrics\ 
+\
 Look at interaction plots between solar insolation and community
 ```{r,echo=T,message=T, warning=F}
 par(mfrow = c(2,3))
@@ -1166,8 +1171,9 @@ interaction.plot(comm_fr_std$rad,
                  xlab = 'productivity',
                  legend = F)
 ```
-solar insolation interactions for all metrics
 
+solar insolation interactions for all metrics\
+\
 GLM evaluation functions 
 ```{r, echo = T, message = F, warning =F}
 # function to calculate pseudo R2 for logistic
@@ -1235,21 +1241,6 @@ residual_plot <- function(mod, data, metric){
     theme_bw(base_size = 10) + 
     labs(title = tname, x = paste("predicted", metric), y = "residuals") # set the graph labels
   return(g)
-}
-```
-
-```{r, echo = T, message = F, warning =F}
-# Function to plot Q-Q plot and test normality
-norm_check <- function(model, data, metric){
-  # mod: best model
-  # data: dataframe
-  # metric: response 
-  
-  # plot Q-Q plot
-  qqnorm(model$fitted.values-data[,metric]) 
-  qqline(model$fitted.values-data[,metric])
-  # use Shapiro test to evaluate if the residuals are normally distributed
-  shapiro.test(model$fitted.values - data[,metric])
 }
 ```
 
@@ -1625,8 +1616,9 @@ grid.arrange(arrangeGrob(flpc, flptran, flpt, flpr, ncol=4, nrow=1),
              ncol=1,
              nrow =2)
 ```
-Combine flower phenology plots into a single figure 
-```{r, echo = T, message = T, warning = F}
+
+```{r, echo = T, message = F, warning = F, fig.show='hide'}
+# Combine flower phenology plots into a single figure and save
 # arrange figure 
 fl_plots <- grid.arrange(arrangeGrob(flic, flitran,flir,flit, ncol=4, nrow=1),
                          arrangeGrob(fliy, ncol=1, nrow=1),  
@@ -1966,8 +1958,8 @@ grid.arrange(arrangeGrob(frpc, frpr, ncol=2, nrow=1),
          nrow = 2)
 ```
 
-Combine fruit phenology plots into a single figure 
-```{r, echo = T, message = T, warning = F}
+```{r, echo = T, message = F, warning = F, fig.show='hide'}
+# Combine fruit phenology plots into a single figure and save
 fr_plots <- grid.arrange(arrangeGrob(fric, frir,frit, ncol=3, nrow=1),
                          arrangeGrob(friy, ncol=1, nrow=1),  
                          arrangeGrob(frspc, frspr, ncol=2, nrow=1),
