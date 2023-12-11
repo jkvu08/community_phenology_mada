@@ -1289,6 +1289,7 @@ summary(fli_best)
 # plot residuals
 residual_plot(fli_best, comm_fl_std, 'individuals')
 ```
+
 Visualize relationship between individual flowering and best model variables
 ```{r, echo = T, message = T, warning = F}
 # plot boxplot of prop. of individuals flowering within and outside of the dry-to-wet season transition
@@ -1424,7 +1425,10 @@ residual_plot(ikflsp[[3]], comm_fl_std, 'sprich')
 Visualize relationship between taxa flowering and best model variables
 ```{r, echo = T, message = T, warning = F}
 # plot boxplot of prop. of taxa flowering within and outside of the dry-to-wet season transition
-flsptran <- ggplot(kphen_pop_fl, aes(y = sprich, x = as.factor(transition), group = as.factor(transition))) +
+flsptran <- ggplot(kphen_pop_fl, 
+                   aes(y = sprich, 
+                       x = as.factor(transition), 
+                       group = as.factor(transition))) +
                 geom_boxplot(aes()) +
                 theme_minimal() + 
                 ylab('proportion of taxa') +
@@ -1435,7 +1439,10 @@ flsptran <- ggplot(kphen_pop_fl, aes(y = sprich, x = as.factor(transition), grou
                 scale_x_discrete(labels = c('Jan-Sep', 'Oct-Dec'))
 
 # plot boxplot of prop. of taxa flowering between communities
-flspc <- ggplot(kphen_pop_fl, aes(y = sprich, x = dataset, group = dataset)) +
+flspc <- ggplot(kphen_pop_fl, 
+                aes(y = sprich, 
+                    x = dataset, 
+                    group = dataset)) +
             geom_boxplot(aes(color = dataset)) +
             theme_minimal() + 
             ylab('proportion of taxa') +
@@ -1466,7 +1473,10 @@ flspr <- plot(ggpredict(flsp_best, terms = c("rain[all]","dataset"), type = 'fe'
                                    labels = c(0,0.1,0.2,0.3,0.4,0.5))
 
 # plot boxplot of prop. of taxa flowering across years
-flspy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = sprich, x = as.factor(year), color = dataset)) +
+flspy <- ggplot(kphen_pop_fl %>% filter(year > 2010), 
+                aes(y = sprich, 
+                    x = as.factor(year), 
+                    color = dataset)) +
               geom_boxplot(position = "dodge") +
               theme_minimal() + 
               ylab('proportion of taxa') +
@@ -1485,63 +1495,33 @@ grid.arrange(arrangeGrob(flspc, flsptran,flspr, ncol=3, nrow=1),
 
 **GLM for flower productivity with community interactions (beta)**
 ```{r, echo = T, message = F, warning =F}
-mod1 <- betareg(productivity_br~indi_cov + rain*dataset +rad*dataset + transition*dataset + year*dataset,
+mod1 <- betareg(productivity_br~rain*dataset +rad*dataset + transition + year*dataset,
                 comm_fl_std, 
                 link = 'logit')
 
-mod2 <- betareg(productivity_br~indi_cov + rain*dataset +temp*dataset + transition*dataset + year*dataset,
-                comm_fl_std, 
-                link = 'logit')
-
-mod3 <- betareg(productivity_br~indi_cov + temp*dataset + transition + year*dataset, 
-                comm_fl_std, 
-                link = 'logit')
-
-mod4 <- betareg(productivity_br~indi_cov + temp*dataset + transition + year, 
-                comm_fl_std, 
-                link = 'logit')
-
-mod5 <- betareg(productivity_br~indi_cov + temp*dataset + transition, 
-                comm_fl_std, 
-                link = 'logit')
-
-mod6 <- betareg(productivity_br~indi_cov + temp*dataset, 
-                comm_fl_std, 
-                link = 'logit')
-
-mod7 <- betareg(productivity_br~rain*dataset +rad*dataset + transition + year*dataset,
-                comm_fl_std, 
-                link = 'logit')
-
-mod8 <- betareg(productivity_br~rain*dataset +temp*dataset + transition + year*dataset,
+mod2 <- betareg(productivity_br~rain*dataset +temp*dataset + transition + year*dataset,
                 comm_fl_std, 
                 link = 'logit')
 
 
-mod9<- betareg(productivity_br~rain +temp*dataset + transition + year*dataset,
+mod3<- betareg(productivity_br~rain +temp*dataset + transition + year*dataset,
                 comm_fl_std, 
                 link = 'logit')
 
-mod10 <- betareg(productivity_br~temp*dataset + transition + year*dataset,
+mod4 <- betareg(productivity_br~temp*dataset + transition + year*dataset,
                 comm_fl_std, 
                 link = 'logit')
 
-mod11 <- betareg(productivity_br~temp*dataset + transition + year,
+mod5 <- betareg(productivity_br~temp*dataset + transition + year,
                 comm_fl_std, 
                 link = 'logit')
 
-mod12 <- betareg(productivity_br~temp*dataset + transition,
+mod6 <- betareg(productivity_br~temp*dataset + transition,
                 comm_fl_std, 
                 link = 'logit')
-
-mod13<- betareg(productivity_br~rain +temp*dataset + transition,
-                comm_fl_std, 
-                link = 'logit')
-
 
 # generate aic and extract information from best model
-ikflp <- aic_best(list(mod1,mod2,mod3,mod4,mod5,mod6,
-                       mod7,mod8,mod9,mod10,mod11,mod12,mod13), 'flower','productivity',T)
+ikflp <- aic_best(list(mod1,mod2,mod3,mod4,mod5,mod6), 'flower','productivity',T)
 
 # assign best model object
 flp_best <- ikflp[[3]]
@@ -1553,28 +1533,30 @@ ikflp[[1]]
 summary(flp_best)
 
 # plot residuals
-plot_fun(flp_best, comm_fl_std, 'productivity_br')
-
-# Q-Q plot & normality check 
-norm_check(flp_best, comm_fl_std, 'productivity_br')
-
-write.csv(ikflp[[2]], 'comm_prod_noindi_glm_params.csv')
+residual_plot(flp_best, comm_fl_std, 'productivity_br')
 ```
 
 Visualize relationship between flowering productivity and best model variables
 ```{r, echo = T, message = T, warning = F}
 # plot boxplot of flowering productivity within and outside of the dry-to-wet season transition
-flptran <- ggplot(kphen_pop_fl, aes(y = productivity, x = as.factor(transition), group = as.factor(transition))) +
+flptran <- ggplot(kphen_pop_fl, 
+                  aes(y = productivity, 
+                      x = as.factor(transition), 
+                      group = as.factor(transition))) +
                 geom_boxplot(aes()) +
                 theme_minimal() + 
                 ylab('productivity') +
                 xlab('') +
-                theme(legend.position = 'None',text = element_text(size = 8), 
+                theme(legend.position = 'None',
+                      text = element_text(size = 8), 
                       axis.text = element_text(size = 8)) +
                 scale_x_discrete(labels = c('Jan-Sep', 'Oct-Dec')) 
 
 # plot boxplot of flowering productivity between communities
-flpc <- ggplot(kphen_pop_fl, aes(y = productivity, x = dataset, group = dataset)) +
+flpc <- ggplot(kphen_pop_fl, 
+               aes(y = productivity, 
+                   x = dataset, 
+                   group = dataset)) +
               geom_boxplot(aes(color = dataset)) +
               theme_minimal() + 
               ylab('productivity') +
@@ -1586,13 +1568,15 @@ flpc <- ggplot(kphen_pop_fl, aes(y = productivity, x = dataset, group = dataset)
               scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
 
 # plot estimated relationship between temperature and flowering productivity
-flpt <- plot(ggpredict(flp_best, terms = c("temp[all]","dataset"), type = 'fe'),
+flpt <- plot(ggpredict(flp_best, 
+                       terms = c("temp[all]","dataset"), 
+                       type = 'fe'),
                        ci = T, 
                        add.data =T, 
                        colors = 'metro', 
                        jitter = 0.0001, 
                        show.legend= F,
-                                 show.title = F, 
+                       show.title = F, 
                        dot.size=1,
                        dot.alpha=0.2) +
               xlab('mean monthly temp (C)') +
@@ -1600,51 +1584,32 @@ flpt <- plot(ggpredict(flp_best, terms = c("temp[all]","dataset"), type = 'fe'),
               theme(legend.position = 'None',
                     text = element_text(size = 8), 
                     axis.text = element_text(size = 8)) +
-              scale_x_continuous(limits = c(0, 1), 
-                                 breaks = c(0, 0.217,0.399,0.58,0.76,0.947), 
-                                 labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fl$temp, na.rm =T)-min(kphen_pop_fl$temp, na.rm =T)) + min(kphen_pop_fl$temp, na.rm =T),0))
+              scale_x_continuous(labels = ~round(.*sd(kphen_pop_fl$temp) + mean(kphen_pop_fl$temp),0))
 
 # plot estimated relationship between rain and flowering productivity
-flpr <- plot(ggpredict(flp_best, terms = c("rain[all]","dataset"), type = 'fe'),
-                        ci = T, 
-                        add.data =T, 
-                        colors = 'metro', 
-                        jitter = 0.0001, 
-                        show.legend= F,
-                        show.title = F, 
-                        dot.size=1,
-                        dot.alpha=0.2) +
+flpr <- plot(ggpredict(flp_best, 
+                       terms = c("rain[all]","dataset"), 
+                       type = 'fe'),
+                       ci = T, 
+                       add.data =T, 
+                       colors = 'metro', 
+                       jitter = 0.0001, 
+                       show.legend= F,
+                       show.title = F, 
+                       dot.size=1,
+                       dot.alpha=0.2) +
                 xlab('cumulative monthly rainfall (mm)') +
                 ylab('productivity') +
                 theme(legend.position = 'None',
                       text = element_text(size = 8), 
                       axis.text = element_text(size = 8)) +
-                scale_x_continuous(limits = c(0, 1), 
-                                   labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
-                scale_y_continuous(limits = c(0, 0.5), 
-                                   labels = c(0,0.1,0.2,0.3,0.4,0.5))
-
-
-# plot estimated relationship between prop. of individuals and flowering productivity 
-# flpi <- plot(ggpredict(flp_best, terms = c("indi_cov[all]","dataset"), type = 'fe'),
-#                        ci = T, 
-#                        add.data =T, 
-#                        colors = 'metro', 
-#                        jitter = 0.0001, 
-#                        show.legend= F,
-#                        show.title = F, 
-#                        dot.size=1,
-#                        dot.alpha=0.2) +
-#           xlab('proportion of individuals') +
-#           ylab('productivity') +
-#           theme(legend.position = 'None',
-#                 text = element_text(size = 8), 
-#                 axis.text = element_text(size = 8)) +
-#           scale_x_continuous(limits = c(0, 1), 
-#                              labels = round(c(0, 0.245238,0.4904762, 0.7357143, 0.9809524)*(max(kphen_pop_fl$individuals, na.rm =T)-min(kphen_pop_fl$individuals, na.rm =T)) + min(kphen_pop_fl$individuals, na.rm =T),2))
+                scale_x_continuous(labels = ~round(.*sd(kphen_pop_fl$rain) + mean(kphen_pop_fl$rain),0))
 
 # plot boxplot of flowering productivity across years
-flpy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = productivity, x = as.factor(year), color = dataset)) +
+flpy <- ggplot(kphen_pop_fl %>% filter(year > 2010), 
+               aes(y = productivity, 
+                   x = as.factor(year), 
+                   color = dataset)) +
               geom_boxplot(position = "dodge") +
               theme_minimal() +
               ylab('productivity') +
@@ -1656,11 +1621,10 @@ flpy <- ggplot(kphen_pop_fl %>% filter(year > 2010), aes(y = productivity, x = a
 
 # arrange plots and output 
 grid.arrange(arrangeGrob(flpc, flptran, flpt, flpr, ncol=4, nrow=1),
-         arrangeGrob(flpy, ncol=1, nrow=1),  
-         ncol=1,
-         nrow =2)
+             arrangeGrob(flpy, ncol=1, nrow=1),  
+             ncol=1,
+             nrow =2)
 ```
-
 Combine flower phenology plots into a single figure 
 ```{r, echo = T, message = T, warning = F}
 # arrange figure 
@@ -1674,8 +1638,11 @@ fl_plots <- grid.arrange(arrangeGrob(flic, flitran,flir,flit, ncol=4, nrow=1),
                          nrow =6)
 
 # save figure 
-ggsave(file = paste0(figpath, '/Fig2_30_09_2023.png'),plot = fl_plots,
-      width = 6.5, height = 9, units = 'in')
+ggsave(file = 'Fig2.png',
+       plot = fl_plots,
+       width = 6.5, 
+       height = 9, 
+       units = 'in')
 ```
 
 **GLM for fruiting individuals with community interactions**
@@ -1714,15 +1681,15 @@ ikfri[[1]]
 summary(fri_best)
 
 # plot residuals
-plot_fun(best_models[[2]], comm_fr_std, 'individuals')
-
-# Q-Q plot & normality check 
-norm_check(best_models[[2]], comm_fr_std, 'individuals') 
+residual_plot(fri_best, comm_fr_std, 'individuals')
 ```
 
 ```{r, echo = T, message = F, warning =F}
 # plot boxplot of prop. fruiting individuals between communities
-fric <- ggplot(kphen_pop_fr, aes(y = individuals, x = dataset, group = dataset)) +
+fric <- ggplot(kphen_pop_fr, 
+               aes(y = individuals, 
+                   x = dataset, 
+                   group = dataset)) +
           geom_boxplot(aes(color = dataset)) +
           theme_minimal() + 
           ylab('proportion of individuals') +
@@ -1734,7 +1701,9 @@ fric <- ggplot(kphen_pop_fr, aes(y = individuals, x = dataset, group = dataset))
           scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
   
 # plot estimated relaitonship between rain and prop. of individuals fruiting
-frir <- plot(ggpredict(fri_best, terms = c("rain[all]","dataset"), type = 'fe'),
+frir <- plot(ggpredict(fri_best, 
+                       terms = c("rain[all]","dataset"), 
+                       type = 'fe'),
                        ci = T, 
                        add.data =T, 
                        colors = 'metro', 
@@ -1748,13 +1717,14 @@ frir <- plot(ggpredict(fri_best, terms = c("rain[all]","dataset"), type = 'fe'),
               theme(legend.position = 'None',
                     text = element_text(size = 8), 
                     axis.text = element_text(size = 8)) +
-              scale_x_continuous(limits = c(0, 1), 
-                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fl$rain, na.rm =T)-min(kphen_pop_fl$rain, na.rm =T)) + min(kphen_pop_fl$rain, na.rm =T),0)) +
+              scale_x_continuous(labels = ~round(.*sd(kphen_pop_fr$rain) + mean(kphen_pop_fr$rain),0)) + 
               scale_y_continuous(limits = c(0, 0.4), 
                                  labels = c(0,0.1,0.2,0.3,0.4))
 
 # plot estimated relaitonship between temperature and prop. of individuals fruiting
-frit <- plot(ggpredict(fri_best, terms = c("temp[all]","dataset"), type = 'fe'),
+frit <- plot(ggpredict(fri_best, 
+                       terms = c("temp[all]","dataset"), 
+                       type = 'fe'),
                        ci = T, 
                        add.data =T, 
                        colors = 'metro', 
@@ -1768,14 +1738,15 @@ frit <- plot(ggpredict(fri_best, terms = c("temp[all]","dataset"), type = 'fe'),
             theme(legend.position = 'None',
                   text = element_text(size = 8), 
                   axis.text = element_text(size = 8)) +
-             scale_x_continuous(limits = c(0, 1), 
-                                breaks = c(0, 0.217,0.399,0.58,0.76,0.947), 
-                                labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fr$temp, na.rm =T)-min(kphen_pop_fr$temp, na.rm =T)) + min(kphen_pop_fr$temp, na.rm =T),0)) +
+            scale_x_continuous(labels = ~round(.*sd(kphen_pop_fr$temp) + mean(kphen_pop_fr$temp),0)) + 
             scale_y_continuous(limits = c(0, 0.4), 
                                labels = c(0,0.1,0.2,0.3,0.4))
 
 # plot boxplot of prop. fruiting individuals across years
-friy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = individuals, x = as.factor(year), color = dataset)) +
+friy <- ggplot(kphen_pop_fr %>% filter(year > 2010), 
+               aes(y = individuals, 
+                   x = as.factor(year), 
+                   color = dataset)) +
               geom_boxplot(position = "dodge") +
               theme_minimal() + 
               ylab('proportion of individuals') +
@@ -1787,9 +1758,9 @@ friy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = individuals, x = as
 
 # arrange plots and output
 grid.arrange(arrangeGrob(fric, frir,frit, ncol=3, nrow=1),
-         arrangeGrob(friy, ncol=1, nrow=1), 
-         ncol = 1,
-         nrow = 2)
+             arrangeGrob(friy, ncol=1, nrow=1), 
+             ncol = 1,
+             nrow = 2)
                                                     
 ```
 
@@ -1834,15 +1805,15 @@ ikfrsp[[1]]
 summary(frsp_best)
 
 # plot residuals
-plot_fun(best_models[[4]], comm_fr_std, 'sprich')
-
-# Q-Q plot & normality check 
-norm_check(best_models[[4]], comm_fr_std, 'sprich') 
+residual_plot(frsp_best, comm_fr_std, 'sprich')
 ```
 
 ```{r, echo = T, message = F, warning =F}
 # plot boxplot of prop. fruiting taxa between communities
-frspc <- ggplot(kphen_pop_fr, aes(y = sprich, x = dataset, group = dataset)) +
+frspc <- ggplot(kphen_pop_fr, 
+                aes(y = sprich, 
+                    x = dataset, 
+                    group = dataset)) +
             geom_boxplot(aes(color = dataset)) +
             theme_minimal() + 
             ylab('proportion of taxa') +
@@ -1854,7 +1825,9 @@ frspc <- ggplot(kphen_pop_fr, aes(y = sprich, x = dataset, group = dataset)) +
             scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
   
 # plot estimated relaitonship between rain and prop. of taxa fruiting
-frspr <- plot(ggpredict(frsp_best, terms = c("rain[all]","dataset"), type = 'fe'),
+frspr <- plot(ggpredict(frsp_best, 
+                        terms = c("rain[all]","dataset"), 
+                        type = 'fe'),
                         ci = T, 
                         add.data =T, 
                         colors = 'metro', 
@@ -1868,86 +1841,59 @@ frspr <- plot(ggpredict(frsp_best, terms = c("rain[all]","dataset"), type = 'fe'
               theme(legend.position = 'None',
                     text = element_text(size = 8), 
                     axis.text = element_text(size = 8)) +
-              scale_x_continuous(limits = c(0, 1), 
-                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fr$rain, na.rm =T)-min(kphen_pop_fr$rain, na.rm =T)) + min(kphen_pop_fr$rain, na.rm =T),0)) +
+              scale_x_continuous(labels = ~round(.*sd(kphen_pop_fr$rain) + mean(kphen_pop_fr$rain),0)) + 
               scale_y_continuous(limits = c(0, 0.5), 
                                  labels = c(0,0.1,0.2,0.3,0.4,0.5))
 
 # plot boxplot of prop. fruiting taxa across years
-frspy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = sprich, x = as.factor(year), color = dataset)) +
-              geom_boxplot(position = "dodge") +
-              theme_minimal() + 
-              ylab('proportion of taxa') +
-              xlab('') +
-              theme(legend.position = 'None',
-                    text = element_text(size = 8), 
-                    axis.text = element_text(size = 8)) +
-              scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
+frspy <- ggplot(kphen_pop_fr %>% filter(year > 2010), 
+                aes(y = sprich, 
+                    x = as.factor(year), 
+                    color = dataset)) +
+                geom_boxplot(position = "dodge") +
+                theme_minimal() + 
+                ylab('proportion of taxa') +
+                xlab('') +
+                theme(legend.position = 'None',
+                      text = element_text(size = 8), 
+                      axis.text = element_text(size = 8)) +
+                scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
 
 # arrange plots and output
 grid.arrange(arrangeGrob(frspc, frspr, ncol=2, nrow=1),
-         arrangeGrob(frspy, ncol=1, nrow=1),  
-         ncol = 1,
-         nrow =2)
+             arrangeGrob(frspy, ncol=1, nrow=1),  
+             ncol = 1,
+             nrow =2)
 ```
 
 **GLM for fruit productivity with community interactions (beta)**
 ```{r, echo = T, message = F, warning =F}
-mod1 <- betareg(productivity~indi_cov + rain*dataset +rad*dataset + year*dataset,
+mod1 <- betareg(productivity~rain*dataset +rad*dataset + year*dataset,
              comm_fr_std, 
              link = 'logit')
 
-mod2 <- betareg(productivity~indi_cov + rain*dataset +temp*dataset + year*dataset,
-              comm_fr_std, 
-              link = 'logit')
-
-mod3 <- betareg(productivity~indi_cov +temp*dataset + year*dataset,
-              comm_fr_std, 
-              link = 'logit')
-
-mod4 <- betareg(productivity~indi_cov + temp + year*dataset,
-              comm_fr_std, 
-              link = 'logit')
-
-mod5 <- betareg(productivity~indi_cov + year*dataset,
-              comm_fr_std, 
-              link = 'logit')
-
-mod6 <- betareg(productivity~indi_cov + temp*dataset + year,
-              comm_fr_std, 
-              link = 'logit')
-
-mod7 <- betareg(productivity~indi_cov + temp*dataset,
-              comm_fr_std, 
-              link = 'logit')
-
-mod8 <- betareg(productivity~rain*dataset +rad*dataset + year*dataset,
+mod2 <- betareg(productivity~rain*dataset +temp*dataset + year*dataset,
              comm_fr_std, 
              link = 'logit')
 
-mod9 <- betareg(productivity~rain*dataset +temp*dataset + year*dataset,
+mod3 <- betareg(productivity~rain +rad + year*dataset,
              comm_fr_std, 
              link = 'logit')
 
-mod10 <- betareg(productivity~rain +rad + year*dataset,
+mod4 <- betareg(productivity~rain +temp + year*dataset,
              comm_fr_std, 
              link = 'logit')
 
-mod11 <- betareg(productivity~rain +temp + year*dataset,
+mod5 <- betareg(productivity~rain + year*dataset,
              comm_fr_std, 
              link = 'logit')
 
-mod12 <- betareg(productivity~rain + year*dataset,
-             comm_fr_std, 
-             link = 'logit')
-
-mod13 <- betareg(productivity~ year*dataset,
+mod6 <- betareg(productivity~ year*dataset,
              comm_fr_std, 
              link = 'logit')
 
 # generate aic and extract information from best model
-ikfrp <- aic_best(list(#mod1,mod2,mod3,mod4,mod5,mod6,mod7,
-                       mod8,mod9,mod10,mod11,mod12,mod13), 'fruit','productivity',T)
+ikfrp <- aic_best(list(mod1,mod2,mod3,mod4,mod5,mod6), 'fruit','productivity',T)
 
 # assign best model object
 frp_best <- ikfrp[[3]]
@@ -1959,18 +1905,15 @@ ikfrp[[1]]
 summary(frp_best)
 
 # plot residuals
-plot_fun(frp_best, comm_fr_std, 'productivity')
-
-# Q-Q plot & normality check 
-norm_check(frp_best, comm_fr_std, 'productivity')
-
-
-write.csv(ikfrp[[2]], 'comm_prod_fruit_noindi_glm_params.csv')
+residual_plot(frp_best, comm_fr_std, 'productivity')
 ```
 
 ```{r, echo = T, message = F, warning =F}
 # plot boxplot of fruiting productivity between communities
-frpc <- ggplot(kphen_pop_fr, aes(y = productivity, x = dataset, group = dataset)) +
+frpc <- ggplot(kphen_pop_fr, 
+               aes(y = productivity, 
+                   x = dataset, 
+                   group = dataset)) +
             geom_boxplot(aes(color = dataset)) +
             theme_minimal() + 
             ylab('productivity') +
@@ -1981,67 +1924,32 @@ frpc <- ggplot(kphen_pop_fr, aes(y = productivity, x = dataset, group = dataset)
             scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3')) +
             scale_x_discrete(labels = c('Sangasanga','Vatovavy'))
   
-# plot estimated relationship between temperature and fruiting productivity
-# frpt <- plot(ggpredict(frp_best, terms = c("temp[all]","dataset"), type = 'fe'),
-#                        ci = T, 
-#                        add.data =T, 
-#                        colors = 'metro', 
-#                        jitter = 0.0001, 
-#                        show.legend= F,
-#                        show.title = F, 
-#                        dot.size=1,
-#                        dot.alpha=0.2) +
-#               xlab('mean monthly temp (C)') +
-#               ylab('productivity') +
-#               theme(legend.position = 'None',
-#                     text = element_text(size = 8), 
-#                     axis.text = element_text(size = 8)) +
-#               scale_x_continuous(limits = c(0, 1), 
-#                                  breaks = c(0, 0.217,0.399,0.58,0.76,0.947), 
-#                                  labels = round(c(0, 0.217,0.399,0.58,0.76,0.947)*(max(kphen_pop_fr$temp, na.rm =T)-min(kphen_pop_fr$temp, na.rm =T)) + min(kphen_pop_fr$temp, na.rm =T),0))
-
 # plot estimated relationship between rain and fruiting productivity
-frpr <- plot(ggpredict(frp_best, terms = c("rain[all]","dataset"), type = 'fe'),
-                        ci = T, 
-                        add.data =T, 
-                        colors = 'metro', 
-                        jitter = 0.0001, 
-                        show.legend= F,
-                        show.title = F, 
-                        dot.size=1,
-                        dot.alpha=0.2) +
+frpr <- plot(ggpredict(frp_best, 
+                       terms = c("rain[all]","dataset"), 
+                       type = 'fe'),
+                       ci = T, 
+                       add.data =T, 
+                       colors = 'metro', 
+                       jitter = 0.0001, 
+                       show.legend= F,
+                       show.title = F, 
+                       dot.size=1,
+                       dot.alpha=0.2) +
               xlab('cumulative monthly rainfall (mm)') +
               ylab('productivity') +
               theme(legend.position = 'None',
                     text = element_text(size = 8), 
                     axis.text = element_text(size = 8)) +
-              scale_x_continuous(limits = c(0, 1), 
-                                 labels = round(c(0.006,0.254,0.503,0.751,0.9988832)*(max(kphen_pop_fr$rain, na.rm =T)-min(kphen_pop_fr$rain, na.rm =T)) + min(kphen_pop_fr$rain, na.rm =T),0)) +
-              scale_y_continuous(limits = c(0, 0.5), 
-                                 labels = c(0,0.1,0.2,0.3,0.4,0.5))
-
-
-# plot estimated relationship between prop. of fruiting individuals and fruiting productivity
-# frpi <- plot(ggpredict(frp_best, terms = c("indi_cov[all]","dataset"), type = 'fe'),
-#                        ci = T, 
-#                        add.data =T, 
-#                        colors = 'metro', 
-#                        jitter = 0.0001, 
-#                        show.legend= F,
-#                        show.title = F, 
-#                        dot.size=1,
-#                        dot.alpha=0.2) +
-#                   xlab('proportion of individuals') +
-#                   ylab('productivity') +
-#                   theme(legend.position = 'None',
-#                         text = element_text(size = 8), 
-#                         axis.text = element_text(size = 8)) +
-#                   scale_x_continuous(limits = c(0, 1), 
-#                                      breaks = c(0.12208672,  0.33631436,  0.55054201,  0.76476965,  0.97899729),
-#                                      labels = round(c(0.12208672,  0.33631436,  0.55054201,  0.76476965,  0.97899729)*(max(kphen_pop_fr$individuals, na.rm =T)-min(kphen_pop_fr$individuals, na.rm =T)) + min(kphen_pop_fr$individuals, na.rm =T),2))
+              scale_x_continuous(labels = ~round(.*sd(kphen_pop_fr$rain) + mean(kphen_pop_fr$rain),0)) + 
+              scale_y_continuous(limits = c(0, 0.15), 
+                                 labels = c(0,0.05,0.1,0.15))
 
 # plot boxplot of fruiting productivity across years
-frpy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = productivity, x = as.factor(year), color = dataset)) +
+frpy <- ggplot(kphen_pop_fr %>% filter(year > 2010), 
+               aes(y = productivity, 
+                   x = as.factor(year), 
+                   color = dataset)) +
             geom_boxplot(position = "dodge") +
             theme_minimal() + 
             ylab('productivity') +
@@ -2052,7 +1960,7 @@ frpy <- ggplot(kphen_pop_fr %>% filter(year > 2010), aes(y = productivity, x = a
             scale_color_manual(values = c("sssw" = 'deepskyblue2', "vvsw" = 'firebrick3'))
 
 # arrange plots and output
-grid.arrange(arrangeGrob(frpc, frpt, frpi, ncol=3, nrow=1),
+grid.arrange(arrangeGrob(frpc, frpr, ncol=2, nrow=1),
          arrangeGrob(frpy, ncol=1, nrow=1), 
          ncol = 1,
          nrow = 2)
@@ -2064,13 +1972,12 @@ fr_plots <- grid.arrange(arrangeGrob(fric, frir,frit, ncol=3, nrow=1),
                          arrangeGrob(friy, ncol=1, nrow=1),  
                          arrangeGrob(frspc, frspr, ncol=2, nrow=1),
                          arrangeGrob(frspy, ncol=1, nrow=1),
-                        # arrangeGrob(frpc, frpt, frpi, ncol=3, nrow=1),
                          arrangeGrob(frpc, frpr, ncol=2, nrow=1),
                          arrangeGrob(frpy, ncol=1, nrow=1),
                          ncol = 1, 
                          nrow =6)
 
 # save figure 
-ggsave(file = paste0(figpath, '/Fig3.png'),plot = fr_plots,
+ggsave(file = 'Fig3.png',plot = fr_plots,
       width = 6.5, height = 9, units = 'in')
 ```
