@@ -10,6 +10,12 @@ Manuscript title: Temperature and rainfall seasonality drives tropical community
 
 #### Set up working environment
 First set up working environment and load in relevant files
+```{r, setup, echo=F, message=F, warning=F}
+# set working directory for all chunks
+setwd("C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada")
+knitr::opts_knit$set(root.dir = "C:/Users/Jannet/Documents/Dissertation/codes/community_phenology_mada") 
+```
+
 ```{r, setup, echo=T, message=FALSE, warning=FALSE}
 # load in packages
 library(dplyr)
@@ -25,12 +31,6 @@ library(cowplot)
 library(AICcmodavg)
 library(betareg)
 library(ggeffects)
-
-# set up working directory 
-setwd("C:/data")
-
-# set up directory to save figures
-figpath <- "C:/figures"
 
 # detect cores for parallel computing
 numcores <- detectCores() -1
@@ -49,16 +49,16 @@ kphen_pop_fr$Date <- as.Date(kphen_pop_fr$Date, tz = 'Africa/Nairobi')
 
 kphen_pop_fl <- read.csv('kian_phen_pop_flower_clim.csv', header= T, stringsAsFactors = F)[,-1]
 kphen_pop_fl$Date <- as.Date(kphen_pop_fl$Date, tz = 'Africa/Nairobi')
-
-kphen_pop_fl$productivity_mean <- kphen_pop_fl$productivity_sum/kphen_pop_fl$n
-kphen_pop_fr$productivity_mean <- kphen_pop_fr$productivity_sum/kphen_pop_fr$n
 ```
 columns:\
 year - year\
 month - month\
 monthname - categorical month name\
 Date - date \
-dataset - indicate forest, sssw = Sangasanga and vvsw = Vatovavy \  
+dataset - indicate forest, sssw = Sangasanga and vvsw = Vatovavy \
+n - total indiviudals sampled in a given month
+np - maximum community level productivity in a given month
+ns - total taxa sampled in a given month
 individual_count - number of individuals flowering or fruiting \
 sprich_count - species richness of flowering or fruiting \
 productivity_sum - fruiting or flowering productivity (sum of phenology across individuals) \
@@ -70,7 +70,6 @@ temp - average monthly temp (C)\
 rad - cumulative monthly solar radiation $(Wm^-2)$\
 onset - 0/1 indicates if the record occurs at the onset of the wet season (November -January)
 transition - 0/1 indicates if the record occurs at the transition between the dry and wet season (October-December)
-productivity_mean - mean flower or fruit productivity across individuals
 
 ````{r, echo = T, warning = F, message = F}
 # visualize to get sense of data
@@ -79,28 +78,36 @@ head(kphen_pop_fr)
 
 Get distribution of the responses
 ```{r, echo = T, warning = F, message = T}
-par(mfrow = c(4,2))
-hist(kphen_pop_fl$individuals, xlab ='prop. of individuals', main = 'flower')
-hist(kphen_pop_fl$sprich, xlab = 'prop. of taxa', main = '')
-hist(kphen_pop_fl$productivity, xlab ='productivity', main = '')
-hist(kphen_pop_fl$productivity_mean, xlab ='mean productivity', main = '')
-hist(kphen_pop_fr$individuals, xlab ='prop. of individuals', main = 'fruit')
-hist(kphen_pop_fr$sprich, xlab = 'prop. of taxa', main = '')
-hist(kphen_pop_fr$productivity, xlab ='productivity', main = '')
-hist(kphen_pop_fr$productivity_mean, xlab ='mean productivity', main = '')
+par(mfrow = c(2,3))
+hist(kphen_pop_fl$individuals[which(kphen_pop_fl$dataset == 'vvsw')], xlab ='prop. of individuals', main = 'Vatovavy flower')
+hist(kphen_pop_fl$sprich[which(kphen_pop_fl$dataset == 'vvsw')], xlab = 'prop. of taxa', main = '')
+hist(kphen_pop_fl$productivity[which(kphen_pop_fl$dataset == 'vvsw')], xlab ='productivity', main = '')
+hist(kphen_pop_fl$individuals[which(kphen_pop_fl$dataset == 'sssw')], xlab ='prop. of individuals', main = 'Sangasanga flower')
+hist(kphen_pop_fl$sprich[which(kphen_pop_fl$dataset == 'sssw')], xlab = 'prop. of taxa', main = '')
+hist(kphen_pop_fl$productivity[which(kphen_pop_fl$dataset == 'sssw')], xlab ='productivity', main = '')
+
+par(mfrow = c(2,3))
+hist(kphen_pop_fr$individuals[which(kphen_pop_fr$dataset == 'vvsw')], xlab ='prop. of individuals', main = 'Vatovavy fruit')
+hist(kphen_pop_fr$sprich[which(kphen_pop_fr$dataset == 'vvsw')], xlab = 'prop. of taxa', main = '')
+hist(kphen_pop_fr$productivity[which(kphen_pop_fr$dataset == 'vvsw')], xlab ='productivity', main = '')
+hist(kphen_pop_fr$individuals[which(kphen_pop_fr$dataset == 'sssw')], xlab ='prop. of individuals', main = 'Sangasanga fruit')
+hist(kphen_pop_fr$sprich[which(kphen_pop_fr$dataset == 'sssw')], xlab = 'prop. of taxa', main = '')
+hist(kphen_pop_fr$productivity[which(kphen_pop_fr$dataset == 'sssw')], xlab ='productivity', main = '')
 ```
 
-Evaluate the relationship between community phenology and weather 
+Evaluate the relationship between weather metrics
 ```{r, echo = T, warning = F, message = T}
 # examine the correlation plots between the independent variables 
-corrgram(kphen_pop_fl[,c('rain','temp','rad')], lower.panel =panel.pts, upper.panel= panel.conf,diag.panel = panel.density)
+# Only need to evaluate for community and phenology since same regional data used for both phenology stages and communities
+# local weather data was unavailable for study period
+corrgram(kphen_pop_fl[which(kphen_pop_fl$dataset=='vvsw'),c('rain','temp','rad')], lower.panel =panel.pts, upper.panel= panel.conf,diag.panel = panel.density)
 ```
-Temperature and solar radiation are highly correlation, so should not be put into the same model. 
+Temperature and solar radiation are highly correlation, therefore should not be put into the same model. 
 
-Visualize community phenology across months 
+Visualize community phenology across months for flowering 
 ```{r, echo = T, message = T, warning = F}
 # generate boxplot of prop of individuals flowering across months
-fli_box <- ggplot(kphen_pop_fl %>% filter(year != 2010), 
+fli_box <- ggplot(kphen_pop_fl %>% filter(year != 2010), # drop 2010 since initial data collection period can be associated with inconsistent sampling procedures
                   aes(x=as.factor(month),y=individuals)) +
                 geom_boxplot(outlier.colour="lightgrey") +
                 theme_minimal(base_size=10) +
@@ -119,7 +126,7 @@ flsp_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
                 geom_boxplot(outlier.colour="lightgrey")+
                 theme_minimal(base_size=10) +
                 theme(legend.position = 'none') +
-                labs(x = 'month',y ='species richness') +
+                labs(x = 'month',y ='taxa richness') +
                 facet_wrap(~dataset, 
                            nrow = 1, 
                            ncol = 2, 
@@ -137,6 +144,11 @@ flprod_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
                              ncol = 2, 
                              strip.position = 'right')
 
+plot_grid(fli_box, flsp_box, flprod_box, nrow = 3, ncol=1)
+```
+
+Visualize community phenology across months for flowering 
+```{r, echo = T, message = T, warning = F}
 # generate boxplot of prop of individuals fruiting across months
 fri_box  <- ggplot(kphen_pop_fr,
                    aes(x=as.factor(month),y=individuals)) +
@@ -156,7 +168,7 @@ frsp_box <- ggplot(kphen_pop_fr,
                 geom_boxplot(outlier.colour="lightgrey")+
                 theme_minimal(base_size=10) +
                 theme(legend.position = 'none') +
-                labs(x = 'month',y ='species richness') +
+                labs(x = 'month',y ='taxa richness') +
                 facet_wrap(~dataset, 
                            nrow = 1, 
                            ncol = 2, 
@@ -173,60 +185,9 @@ frprod_box  <- ggplot(kphen_pop_fr,
                              ncol = 2, 
                              strip.position = 'right')
 
-plot_grid(fli_box, fri_box, flsp_box, frsp_box, flprod_box, frprod_box, nrow = 4, ncol=2)
-
 plot_grid(fri_box, frsp_box, frprod_box, nrow = 3, ncol=1)
-
 ```
-
-```{r}
-# generate boxplot of prop of individuals fruiting across months
-fri_box2  <- ggplot(subfruit,
-                   aes(x=as.factor(month),y=fruited)) +
-                geom_boxplot(outlier.colour="lightgrey") +
-                theme_minimal(base_size=10) +
-                theme(legend.position = 'none') +
-                labs(x = 'month',y ='proportion of individuals', title = 'fruiting') +
-                scale_fill_manual(values = c('grey80','grey40')) + 
-                facet_wrap(~dataset, 
-                           nrow = 1, 
-                           ncol = 2, 
-                           strip.position = 'right')
-
-# generate boxplot of prop of taxa fruiting across months
-frsp_box2 <- ggplot(subfruit,
-                   aes(x=as.factor(month),y=sprich))+
-                geom_boxplot(outlier.colour="lightgrey")+
-                theme_minimal(base_size=10) +
-                theme(legend.position = 'none') +
-                labs(x = 'month',y ='proportion of taxa') +
-                facet_wrap(~dataset, 
-                           nrow = 1, 
-                           ncol = 2, 
-                           strip.position = 'right')
-
-frprod_box2  <- ggplot(subfruit,
-                      aes(x=as.factor(month),y=fruit.productivity)) +
-                  geom_boxplot(outlier.colour="lightgrey")+
-                  theme_minimal(base_size=10) +
-                  theme(legend.position = 'none') +
-                  labs(x = 'month',y ='fruit productivity') +
-                  facet_wrap(~dataset, 
-                             nrow = 1, 
-                             ncol = 2, 
-                             strip.position = 'right')
-
-                  
-
-plot_grid(fli_box, fri_box, flsp_box, frsp_box, flprod_box, frprod_box, nrow = 4, ncol=2)
-
-plot_grid(fri_box, frsp_box, frprod_box, nrow = 3, ncol=1)
-plot_grid(frsp_box2, frprod_box2, frcomp_box, ravprod_box, nrow = 4, ncol=1)
-
-plot_grid(ravprod_box, frcomp_box_vv, frcomp_box_ss, nrow = 3, ncol=1)
-```
-
-Visualize community phenology across years
+Visualize community phenology across years for flowering
 ```{r, echo = T, message = T, warning = F}
 # generate boxplot of prop of individuals flowering across years
 fli_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
@@ -245,7 +206,7 @@ flsp_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
                    aes(x=as.factor(year),y=sprich))+
                 geom_boxplot(outlier.colour="lightgrey")+
                 theme_minimal(base_size=10) +
-                labs(x = 'year',y ='species richness')+
+                labs(x = 'year',y ='taxa richness')+
                 theme(legend.position = 'none')  +
                 facet_wrap(~dataset, 
                            nrow = 1, 
@@ -264,6 +225,11 @@ flprod_box <- ggplot(kphen_pop_fl %>% filter(year != 2010),
                              ncol = 2, 
                              strip.position = 'right')
 
+plot_grid(fli_box, flsp_box,flprod_box, nrow = 3, ncol=1)
+```
+
+Visualize community phenology across years for fruiting
+```{r, echo = T, message = T, warning = F}
 # generate boxplot of prop of individual fruiting across years
 fri_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
                   aes(x=as.factor(year),y=individuals)) +
@@ -281,7 +247,7 @@ frsp_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
                    aes(x=as.factor(year),y=sprich)) +
               geom_boxplot(outlier.colour="lightgrey")+
               theme_minimal(base_size=10) +
-              labs(x = 'year',y ='species richness')+
+              labs(x = 'year',y ='taxa richness')+
               theme(legend.position = 'none')  +
               facet_wrap(~dataset, 
                          nrow = 1, 
@@ -300,7 +266,7 @@ frprod_box <- ggplot(kphen_pop_fr %>% filter(year != 2010),
                              ncol = 2, 
                              strip.position = 'right')
 
-plot_grid(fli_box, fri_box, flsp_box, frsp_box, flprod_box, frprod_box, nrow = 3, ncol=2)
+plot_grid(fri_box, frsp_box, frprod_box, nrow = 3, ncol=1)
 ```
 
 Visualize phenology as time series across dates
